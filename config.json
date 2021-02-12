@@ -1,0 +1,15 @@
+{
+    "wallet": {
+        "keystore": "bdex-prod-01-keystore.json",
+        "password": "@MojBdexWalletIvranka95123@"
+    },
+    "logfile": "log.txt",
+    "debugseed": "159.89.252.210",
+    "trademin": 40,
+    "trademax": 10000,
+    "mindeltaperc": 3,
+    "reserve": 10,
+    "baseasset": "BUSD-BD1",
+    "tradedasset": "RUNE-B1A",
+    "crossasset": "BNB"
+}

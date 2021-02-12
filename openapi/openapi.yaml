@@ -1,0 +1,147 @@
+openapi: 3.0.0
+info:
+  title: Skadi Public API
+  version: 1.0.0
+  contact:
+    email: zolo@megafoto.sk
+  description: The Skadi Public API queries Skadi arbitrage bot and prepares information about the bot to be readily available for public users.
+paths:
+  "/v1/swagger.json":
+    get:
+      operationId: GetSwagger
+      summary: Get Swagger
+      description: Returns human and machine readable swagger/openapi specification.
+      responses:
+        "200":
+          description: human and machine readable swagger/openapi specification
+      tags:
+        - Specification
+  "/v1/doc":
+    get:
+      operationId: GetDocs
+      summary: Get Documents
+      description: Swagger/openapi 3.0 specification generated documents.
+      responses:
+        "200":
+          description: swagger/openapi 3.0 spec generated docs
+      tags:
+        - Documentation
+  "/v1/health":
+    get:
+      operationId: GetHealth
+      summary: Get Health
+      description: Returns an object containing the health response of the API.
+      responses:
+        "200":
+          $ref: '#/components/responses/HealthResponse'
+  "/v1/stats":
+    get:
+      operationId: GetStats
+      summary: Get bot statistics
+      description: Return an array containing the bot details
+      responses:
+        "200":
+          $ref: '#/components/responses/StatsResponse'
+  "/v1/trades":
+    get:
+      operationId: GetTrades
+      summary: Get Arbitrage Trade's informations
+      description: Returns an array containing all Arbitrage Trade's informations
+      responses:
+        "400":
+          $ref: '#/components/responses/GeneralErrorResponse'
+        "200":
+          $ref: '#/components/responses/TradesResponse'
+components:
+  responses:
+    StatsResponse:
+      description: object containing global BEPSwap data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StatsData'
+
+    HealthResponse:
+      description: Returns an health status of Skadi
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              database:
+                type: boolean
+              scannerHeight:
+                type: integer
+                format: int64
+
+    TradesResponse:
+      description: array containing Arbitrage Trades' informations
+      content:
+        application/json:
+          schema:
+            type: array
+            $ref: '#/components/schemas/TradeData'
+
+    GeneralErrorResponse:
+      description: error message
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    StatsData:
+      type: object
+      properties:
+        tradeCount:
+          type: integer
+          format: int64
+          description: Total trade count
+        avgPNL:
+          type: integer
+          format: int64
+          description: Average PNL of all trade
+        totalVolume:
+          type: integer
+          format: int64
+          description: Total volume of all trade in RUNE
+        avgTrade:
+          type: integer
+          format: int64
+          description: Total trade amount in RUNE
+        timeRunning:
+          type: string
+          description: Running time
+
+    TradeData:
+      type: object
+      properties:
+        time:
+          type: string
+          description: Trade time
+        asset:
+          type: string
+          description: Asset
+        amountIn:
+          type: integer
+          format: int64
+          description: Amount spent in RUNE
+        amountOut:
+          type: integer
+          format: int64
+          description: Amount earned in RUNE
+        pnl:
+          type: string
+          description: PNL
+    Error:
+      required:
+        - "error"
+      type: object
+      properties:
+        error:
+          type: string
+
+
+servers:
+  - url: http://127.0.0.1:8080
+  - url: https://127.0.0.1:8080
