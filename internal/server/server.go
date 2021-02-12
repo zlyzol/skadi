@@ -22,6 +22,7 @@ import (
 
 	"gitlab.com/zlyzol/skadi/internal/bot"
 	"gitlab.com/zlyzol/skadi/internal/config"
+	"gitlab.com/zlyzol/skadi/internal/store"
 	"gitlab.com/zlyzol/skadi/internal/store/mongo"
 
 	//"gitlab.com/thorchain/midgard/internal/usecase"
@@ -78,12 +79,16 @@ func NewServer(cfgFile *string) (*Server, error) {
 
 	log := initLog(cfg.LogLevel, cfg.Pretty)
 
-	mongo, err := mongo.NewClient(cfg.Mongo)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create mongodb client instance")
+	var db store.Store
+	if !cfg.GCloud {
+		db, err = mongo.NewClient(cfg.Mongo)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create mongodb client instance")
+		
+		}
 	}
 
-	bot, err := bot.NewBot(mongo, cfg)
+	bot, err := bot.NewBot(db, cfg)
 	if err != nil {
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to create bot instance")

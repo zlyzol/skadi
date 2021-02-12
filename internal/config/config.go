@@ -1,17 +1,22 @@
 package config
 
 import (
+	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
 
-// Configuration  for chain service
+// Configuration for chain service
 type Configuration struct {
+	GCloud			bool
 	Scheme			string 			   `json:"scheme" mapstructure:"scheme"`
 	Host     		string 			   `json:"host" mapstructure:"host"`
 	ListenPort      int                `json:"listen_port" mapstructure:"listen_port"`
@@ -102,6 +107,17 @@ func LoadConfiguration(file string) (*Configuration, error) {
 	viper.AutomaticEnv()
 	if err := viper.Unmarshal(&cfg); nil != err {
 		return nil, errors.Wrap(err, "failed to unmarshal")
+	}
+	// apply google cloud PORT variable
+	gcv := os.Getenv("DATAPROC_VERSION")
+	cfg.GCloud = gcv != ""
+	if cfg.GCloud {
+		port := os.Getenv("PORT")
+		if port == "" {
+				port = "8080"
+				cfg.ListenPort, _ = strconv.Atoi(port)
+				log.Info().Msgf("Google cloud listening port is %s", port)
+			}
 	}
 	return &cfg, nil
 }
