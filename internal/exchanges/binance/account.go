@@ -270,7 +270,11 @@ func (acc *Account) readBalances() common.Balances {
 	if err != nil {
 		acc.logger.Err(err).Msg("readBalances failed")
 		if strings.Contains(err.Error(), "msg=Invalid API-key, IP, or permissions for action") {
-			acc.logger.Panic().Msg("INVALID API KEY - check whitelisted IP address on Exchanges")
+			ip, err := common.GetPublicIP()
+			if err != nil {
+				ip = "cannot get IP address: " + err.Error()
+			}
+			acc.logger.Panic().Msgf("INVALID API KEY - check whitelisted IP address on Exchanges, our IP: %s", ip)
 		}
 		return common.Balances{}
 	}

@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"fmt"
 	"net/http"
+	"encoding/json"
 )
 
 // http request executor
@@ -22,4 +23,26 @@ func DoHttpRequest(req *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("%s", body)
 	}
 	return body, nil
+}
+
+func GetPublicIP() (string, error) {
+	var url string
+	// url = "http://" + ip + ":8080/v1/thorchain/pool_addresses"
+	url = "https://api.ipify.org/?format=json"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	bytes, err := DoHttpRequest(req)
+	if err != nil {
+		return "", err
+	}
+	var ip struct {
+		ip	string	`json:"ip"`
+	}
+	err = json.Unmarshal(bytes, &ip)
+	if err != nil {
+		return "", err
+	}
+	return ip.ip, nil
 }
