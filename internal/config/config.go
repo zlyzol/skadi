@@ -16,17 +16,17 @@ import (
 
 // Configuration for chain service
 type Configuration struct {
-	GCloud			bool
-	Scheme			string 			   `json:"scheme" mapstructure:"scheme"`
-	Host     		string 			   `json:"host" mapstructure:"host"`
-	ListenPort      int                `json:"listen_port" mapstructure:"listen_port"`
-	ShutdownTimeout time.Duration      `json:"shutdown_timeout" mapstructure:"shutdown_timeout"`
-	ReadTimeout     time.Duration      `json:"read_timeout" mapstructure:"read_timeout"`
-	WriteTimeout    time.Duration      `json:"write_timeout" mapstructure:"write_timeout"`
-	LogLevel        string             `json:"log_level" mapstructure:"log_level"`
-	Pretty			bool			   `json:"pretty" mapstructure:"pretty"`
-	Mongo           MongoConfiguration `json:"mongo" mapstructure:"mongo"`
-	Exchanges       ExchangesConfiguration  `json:"exchanges" mapstructure:"exchanges"`
+	GCloud          bool
+	Scheme          string                 `json:"scheme" mapstructure:"scheme"`
+	Host            string                 `json:"host" mapstructure:"host"`
+	ListenPort      int                    `json:"listen_port" mapstructure:"listen_port"`
+	ShutdownTimeout time.Duration          `json:"shutdown_timeout" mapstructure:"shutdown_timeout"`
+	ReadTimeout     time.Duration          `json:"read_timeout" mapstructure:"read_timeout"`
+	WriteTimeout    time.Duration          `json:"write_timeout" mapstructure:"write_timeout"`
+	LogLevel        string                 `json:"log_level" mapstructure:"log_level"`
+	Pretty          bool                   `json:"pretty" mapstructure:"pretty"`
+	Mongo           MongoConfiguration     `json:"mongo" mapstructure:"mongo"`
+	Exchanges       ExchangesConfiguration `json:"exchanges" mapstructure:"exchanges"`
 	Accounts        AccountsConfiguration  `json:"accounts" mapstructure:"accounts"`
 }
 type MongoConfiguration struct {
@@ -34,22 +34,23 @@ type MongoConfiguration struct {
 	Port     int    `json:"port" mapstructure:"port"`
 	Database string `json:"database" mapstructure:"database"`
 }
-type ExchangesConfiguration map[string] ExchangeConfiguration
+type ExchangesConfiguration map[string]ExchangeConfiguration
 type ExchangeConfiguration struct {
-	Type		string `json:"type" mapstructure:"type"`
-	AccountName	string `json:"account_name" mapstructure:"account_name"`
-	Parameters	map[string]string
+	Type        string `json:"type" mapstructure:"type"`
+	AccountName string `json:"account_name" mapstructure:"account_name"`
+	Parameters  map[string]string
 }
-type AccountsConfiguration map[string] AccountConfiguration
+type AccountsConfiguration map[string]AccountConfiguration
 type AccountConfiguration struct {
-	Name	string
-	Chains	AccountDetailChainConfiguration
+	Name   string
+	Chains AccountDetailChainConfiguration
 }
-type AccountDetailChainConfiguration map[string] AccountDetailConfiguration
+type AccountDetailChainConfiguration map[string]AccountDetailConfiguration
 type AccountDetailConfiguration struct {
-	KeystoreOrApiKey	string `json:"keystore_or_api_key" mapstructure:"keystore_or_api"`
+	KeystoreOrApiKey    string `json:"keystore_or_api_key" mapstructure:"keystore_or_api"`
 	PasswordOrSecretKey string `json:"password_or_secret_key" mapstructure:"password_or_secret_key"`
 }
+
 func applyDefaultConfig() {
 	viper.SetDefault("read_timeout", "30s")
 	viper.SetDefault("write_timeout", "30s")
@@ -63,30 +64,30 @@ func applyDefaultConfig() {
 	viper.SetDefault("mongo.port", "27017")
 	viper.SetDefault("mongo.database", "test")
 	viper.SetDefault("exchanges", ExchangesConfiguration{
-		"binance_dex": ExchangeConfiguration{ Type: "binance-dex", AccountName: "key_files" }, 
-		"thorchain": ExchangeConfiguration{ Type: "thorchain", AccountName: "key_files", Parameters: map[string]string{ "seed_url": "chaosnet-seed.thorchain.info" }}, 
-		"binance": ExchangeConfiguration{ Type: "binance", AccountName: "binance_api" }, 
-//		"bitmax": ExchangeConfiguration{ Type: "bitmax", AccountName: "bitmax_api" },
+		"binance_dex": ExchangeConfiguration{Type: "binance-dex", AccountName: "key_files"},
+		"thorchain":   ExchangeConfiguration{Type: "thorchain", AccountName: "key_files", Parameters: map[string]string{"seed_url": "chaosnet-seed.thorchain.info"}},
+		////		"binance": ExchangeConfiguration{ Type: "binance", AccountName: "binance_api" },
+		//		"bitmax": ExchangeConfiguration{ Type: "bitmax", AccountName: "bitmax_api" },
 	})
 	viper.SetDefault("accounts", AccountsConfiguration{
-		"key_files": AccountConfiguration { 
+		"key_files": AccountConfiguration{
 			Name: "key_files",
-			Chains: AccountDetailChainConfiguration {
-				"BNB": AccountDetailConfiguration{ KeystoreOrApiKey: "key.json", PasswordOrSecretKey: "BepPassword01@" },
-				"BTC": AccountDetailConfiguration{ KeystoreOrApiKey: "btc.dat", PasswordOrSecretKey: "btcpwd" },
-				"ETH": AccountDetailConfiguration{ KeystoreOrApiKey: "eth.json", PasswordOrSecretKey: "ethpwd" },
+			Chains: AccountDetailChainConfiguration{
+				"BNB": AccountDetailConfiguration{KeystoreOrApiKey: "key.json", PasswordOrSecretKey: "BepPassword01@"},
+				"BTC": AccountDetailConfiguration{KeystoreOrApiKey: "btc.dat", PasswordOrSecretKey: "btcpwd"},
+				"ETH": AccountDetailConfiguration{KeystoreOrApiKey: "eth.json", PasswordOrSecretKey: "ethpwd"},
 			},
 		},
-		"binance_api": AccountConfiguration {
+		"binance_api": AccountConfiguration{
 			Name: "binance_api",
-			Chains: AccountDetailChainConfiguration {
-				"ALL": AccountDetailConfiguration{ KeystoreOrApiKey: "zfzoFyLGeVBIMNAR2NsRXgoXIB1V4QGDKXk1eTdNZ909VtVPvx8dP27e9lPyzX7y", PasswordOrSecretKey: "O0TCrJIchcQvU0diHdmGNf0UxfvxDsOH9skTF0DuO1vDSNhx0vmDNTiMTbdB3ztV" },
+			Chains: AccountDetailChainConfiguration{
+				"ALL": AccountDetailConfiguration{KeystoreOrApiKey: "zfzoFyLGeVBIMNAR2NsRXgoXIB1V4QGDKXk1eTdNZ909VtVPvx8dP27e9lPyzX7y", PasswordOrSecretKey: "O0TCrJIchcQvU0diHdmGNf0UxfvxDsOH9skTF0DuO1vDSNhx0vmDNTiMTbdB3ztV"},
 			},
 		},
-		"bitmax_api": AccountConfiguration {
+		"bitmax_api": AccountConfiguration{
 			Name: "bitmax_api",
-			Chains: AccountDetailChainConfiguration {
-				"ALL": AccountDetailConfiguration{ KeystoreOrApiKey: "x", PasswordOrSecretKey: "y" },
+			Chains: AccountDetailChainConfiguration{
+				"ALL": AccountDetailConfiguration{KeystoreOrApiKey: "x", PasswordOrSecretKey: "y"},
 			},
 		},
 	})
@@ -114,10 +115,10 @@ func LoadConfiguration(file string) (*Configuration, error) {
 	if cfg.GCloud {
 		port := os.Getenv("PORT")
 		if port == "" {
-				port = "8080"
-				cfg.ListenPort, _ = strconv.Atoi(port)
-				log.Info().Msgf("Google cloud listening port is %s", port)
-			}
+			port = "8080"
+			cfg.ListenPort, _ = strconv.Atoi(port)
+			log.Info().Msgf("Google cloud listening port is %s", port)
+		}
 	}
 	return &cfg, nil
 }
