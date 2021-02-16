@@ -275,11 +275,19 @@ func (acc *Account) Refresh() common.Balances {
 	return acc.readBalances()
 }
 func (acc *Account) readBalances() common.Balances {
-	res, err := acc.bin.NewGetAccountService().Do(context.Background())
+	ip, err := common.GetPublicIP()
 	if err != nil {
-		ip, err := common.GetPublicIP()
+		ip, err = common.GetPublicIP()
 		if err != nil {
 			ip = "cannot get IP address: " + err.Error()
+		}
+	}
+	acc.logger.Info().Msgf("PUBLIC IP: %s)", ip)
+	res, err := acc.bin.NewGetAccountService().Do(context.Background())
+	if err != nil {
+		ip, err2 := common.GetPublicIP()
+		if err2 != nil {
+			ip = "cannot get IP address: " + err2.Error()
 		}
 		acc.logger.Err(err).Msgf("readBalances failed (ip: %s): %s", ip, err)
 		if strings.Contains(err.Error(), "msg=Invalid API-key, IP, or permissions for action") {

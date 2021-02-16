@@ -37,12 +37,10 @@ func GetPublicIP() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var ip struct {
-		ip	string	`json:"ip"`
-	}
+	var ip map[string]string 
 	err = json.Unmarshal(bytes, &ip)
 	if err != nil {
 		return "", err
 	}
-	return ip.ip, nil
+	return ip["ip"], nil
 }
