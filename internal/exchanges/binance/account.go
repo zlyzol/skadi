@@ -2,11 +2,11 @@ package binance
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync/atomic"
 	"time"
-	"encoding/json"
 
 	"gitlab.com/zlyzol/skadi/internal/c"
 	"gitlab.com/zlyzol/skadi/internal/common"
@@ -17,15 +17,18 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
 var accc *Account
+
 type Account struct {
-	logger		zerolog.Logger
-	cfg			*config.AccountConfiguration
-	bin			*binapi.Client
+	logger         zerolog.Logger
+	cfg            *config.AccountConfiguration
+	bin            *binapi.Client
 	atomicBalances atomic.Value // common.Balances
-	ex			*binance
-	listeners	common.ThreadSafeSlice
+	ex             *binance
+	listeners      common.ThreadSafeSlice
 }
+
 func (b *binance) NewAccount(cfg *config.AccountConfiguration, accs *common.Accounts) (*Account, *binapi.Client, error) {
 	_, found := accs.Get(cfg.Name)
 	if found {
@@ -43,8 +46,8 @@ func (b *binance) NewAccount(cfg *config.AccountConfiguration, accs *common.Acco
 	acc := Account{
 		logger: log.With().Str("module", "binance.account").Logger(),
 		cfg:    cfg,
-		bin:   	bin,
-		ex:		b,
+		bin:    bin,
+		ex:     b,
 	}
 	accc = &acc
 	acc.readBalances()
@@ -87,7 +90,7 @@ func (acc *Account) GetDepositAddresses(asset common.Asset) common.DepositAddres
 }
 func (acc *Account) tryChain(chain, ticker string) common.DepositAddresses {
 	ticker = common.Ticker(ticker).String() // covert B-tickers
-	for i := 0;; i++ {
+	for i := 0; ; i++ {
 		resAddr, err := acc.bin.NewGetDepositAddressWithNetworkService().Coin(ticker).Network(chain).Do(context.Background())
 		if err != nil {
 			acc.logger.Panic().Msg("if unsupported chain - we should not repeat this request")
@@ -102,8 +105,8 @@ func (acc *Account) tryChain(chain, ticker string) common.DepositAddresses {
 		}
 		res := make(common.DepositAddresses)
 		res[chain] = common.DepositAddress{
-			Address:	resAddr.Address,
-			Memo:		resAddr.Tag,
+			Address: resAddr.Address,
+			Memo:    resAddr.Tag,
 		}
 		return res
 	}
@@ -115,7 +118,7 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 	if acc.ex.chains == nil {
 		return nil, common.ZeroUint(), errors.New(fmt.Sprintf("failed to find asset for ticker chain for ticker %s in wallet %s", srcAsset.Ticker, acc.GetName()))
 	}
-	
+
 	// add al possible chains
 	chi, found := acc.ex.chains[srcAsset.Ticker]
 	if !found {
@@ -123,7 +126,9 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 	}
 	srcAsset, _ = common.NewMultiChainAsset(chi.chain, srcAsset.Symbol.String())
 	chain, depositAddress, err := acc.getTargetDepositAddress(srcAsset, target)
-	if err != nil { return nil, common.ZeroUint(), err }
+	if err != nil {
+		return nil, common.ZeroUint(), err
+	}
 	// fee and min withdraw
 	chd, found := chi.chainDetails[chain]
 	fee := common.ZeroUint()
@@ -138,7 +143,7 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 	sent = amount.RoundTo(mul)
 	amountStr := sent.String()
 	var res *binapi.CreateWithdrawResponse
-	for i := 0;; i++{
+	for i := 0; ; i++ {
 		res, err = acc.bin.NewCreateWithdrawService().
 			Address(depositAddress.Address).
 			AddressTag(depositAddress.Memo).
@@ -147,17 +152,21 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 			Network(chain).
 			Do(context.Background())
 		if err != nil || (i >= c.BINANCE_GETSERVICE_ERR_SLEEP_TRY_CNT && !res.Success) || (!res.Success && strings.Contains(res.Msg, "The user has insufficient balance available")) {
-			if err == nil { err = errors.New(res.Msg) }
+			if err == nil {
+				err = errors.New(res.Msg)
+			}
 			acc.logger.Error().Err(err).Msg("bin.NewCreateWithdrawService failed")
 			return nil, common.ZeroUint(), errors.Wrap(err, "bin.NewCreateWithdrawService failed")
 		}
 		if err != nil || !res.Success {
-			if err == nil { err = errors.New("bin.NewCreateWithdrawService resturned Success == false") }
+			if err == nil {
+				err = errors.New("bin.NewCreateWithdrawService resturned Success == false")
+			}
 			acc.logger.Error().Err(err).Int("i", i).Msg("bin.NewCreateWithdrawService failed - trying again")
 			time.Sleep(c.BINANCE_GETSERVICE_ERR_SLEEP_MS * time.Millisecond)
 			continue
 		}
-		break;
+		break
 	}
 	acc.logger.Info().Str("deposit address", depositAddress.Address).Str("asset", srcAsset.Ticker.String()).Str("from", acc.GetName()).Str("to", target.GetName()).Str("chain", chain).Msg("funds sent (async)")
 
@@ -169,11 +178,11 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 		}
 		time.Sleep(400 * time.Millisecond)
 		return &withdraw.ID, common.NewUintFromFloat(withdraw.TransactionFee), nil
-	}		
+	}
 	return nil, fee, nil
 }
 func (acc *Account) waitForWithdraw(withdrawId, ticker string, startTime int64) (withdraw *binapi.Withdraw, err error) {
-	worker := common.ThreadSafeSliceWorker{ ListenerC: make(chan interface{}, 10) }
+	worker := common.ThreadSafeSliceWorker{ListenerC: make(chan interface{}, 10)}
 	acc.listeners.Push(&worker)
 	defer acc.listeners.Remove(&worker)
 	timeoutC := time.After(24 * time.Hour)
@@ -220,12 +229,12 @@ func (acc *Account) checkWithdraw(withdrawId, ticker string, startTime int64) (w
 	return nil, nil // withdraw not completed yet
 }
 func (acc *Account) WaitForDeposit(txID string) error {
-	startTime := (time.Now().Unix() - 60) * 1000 // minus one minute 
+	startTime := (time.Now().Unix() - 60) * 1000 // minus one minute
 	_, err := acc.waitForDeposit(txID, startTime)
 	return err
 }
 func (acc *Account) waitForDeposit(txID string, startTime int64) (deposit *binapi.Deposit, err error) {
-	worker := common.ThreadSafeSliceWorker{ ListenerC: make(chan interface{}, 10) }
+	worker := common.ThreadSafeSliceWorker{ListenerC: make(chan interface{}, 10)}
 	acc.listeners.Push(&worker)
 	defer acc.listeners.Remove(&worker)
 	timeoutC := time.After(24 * time.Hour)
@@ -268,12 +277,12 @@ func (acc *Account) Refresh() common.Balances {
 func (acc *Account) readBalances() common.Balances {
 	res, err := acc.bin.NewGetAccountService().Do(context.Background())
 	if err != nil {
-		acc.logger.Err(err).Msg("readBalances failed")
+		ip, err := common.GetPublicIP()
+		if err != nil {
+			ip = "cannot get IP address: " + err.Error()
+		}
+		acc.logger.Err(err).Msgf("readBalances failed (ip: %s): %s", ip, err)
 		if strings.Contains(err.Error(), "msg=Invalid API-key, IP, or permissions for action") {
-			ip, err := common.GetPublicIP()
-			if err != nil {
-				ip = "cannot get IP address: " + err.Error()
-			}
 			acc.logger.Panic().Msgf("INVALID API KEY - check whitelisted IP address on Exchanges, our IP: %s", ip)
 		}
 		return common.Balances{}
@@ -305,15 +314,21 @@ func (acc *Account) getTargetDepositAddress(srcAsset common.Asset, target common
 	if len(srcAsset.Chain) > 1 { // we have more common chains, try to find one of the preffered chains ("BNB", "BSC", "THOR", "ETH")
 		for _, chain = range c.CHAIN_SENDING_PREFERENCE {
 			ch, _ := common.NewChain(chain)
-			if !srcAsset.Chain.Contains(ch) { continue }
+			if !srcAsset.Chain.Contains(ch) {
+				continue
+			}
 			depositAddress, found = depositAddresses[chain]
-			if !found { continue }
+			if !found {
+				continue
+			}
 			break
 		}
 		if !found { // if there is not common preffered chain, so we choose the first
 			for _, chain = range srcAsset.Chain {
 				depositAddress, found = depositAddresses[chain]
-				if found { break }
+				if found {
+					break
+				}
 			}
 		}
 		if !found {
@@ -341,8 +356,11 @@ func (acc *Account) accountWatcher() {
 	eventC := make(chan struct{})
 	errorC := make(chan struct{})
 	var listenKey string
-	var err error 
-	err = common.Try(3, 100, func() error { listenKey, err = acc.bin.NewStartUserStreamService().Do(context.Background()); return err })
+	var err error
+	err = common.Try(3, 100, func() error {
+		listenKey, err = acc.bin.NewStartUserStreamService().Do(context.Background())
+		return err
+	})
 	if err != nil {
 		acc.logger.Err(err).Msg("NewStartUserStreamService failed")
 	}
@@ -355,9 +373,11 @@ func (acc *Account) accountWatcher() {
 			eventC <- struct{}{}
 		}
 	}
-	errHandler := func(err error) {	acc.logger.Debug().Err(err).Msg("WsUserDataServe failed (but we continue)") }
+	errHandler := func(err error) { acc.logger.Debug().Err(err).Msg("WsUserDataServe failed (but we continue)") }
 	err = common.Try(3, 100, func() error { _, stopC, err = binapi.WsUserDataServe(listenKey, wsHandler, errHandler); return err })
-	if err != nil { acc.logger.Err(err).Msg("binance.WsUserDataServe failed") }
+	if err != nil {
+		acc.logger.Err(err).Msg("binance.WsUserDataServe failed")
+	}
 	ticker := time.NewTicker(5 * time.Second)
 	for {
 		select {
@@ -376,7 +396,9 @@ func (acc *Account) accountWatcher() {
 			})
 		case <-errorC:
 			err = common.Try(3, 100, func() error { _, stopC, err = binapi.WsUserDataServe(listenKey, wsHandler, errHandler); return err })
-			if err != nil { acc.logger.Err(err).Msg("binance.WsUserDataServe failed") }
+			if err != nil {
+				acc.logger.Err(err).Msg("binance.WsUserDataServe failed")
+			}
 		}
 	}
 }
