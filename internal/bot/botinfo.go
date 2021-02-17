@@ -3,6 +3,7 @@ package bot
 import (
 	"time"
 	"gitlab.com/zlyzol/skadi/internal/models"
+	"gitlab.com/zlyzol/skadi/internal/common"
 )
 
 // GetStartTime returns bot start time
@@ -21,7 +22,7 @@ func (bot *Bot) GetHealth() *models.HealthStatus {
 func (bot *Bot) GetStats() (*models.Stats, error) {
 	stats, err := bot.store.GetStats()
 	stats.TimeRunning = time.Since(bot.GetStartTime()).String()
-	stats.IpAddress = GetPublicIP()
+	stats.IpAddress = common.GetPublicIP()
 	if err != nil {
 		return nil, err
 	}

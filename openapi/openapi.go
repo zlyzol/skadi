@@ -31,6 +31,9 @@ type StatsData struct {
 	// Running time
 	TimeRunning *string `json:"timeRunning,omitempty"`
 
+	// Public IP address 
+	IpAddress *string `json:"ipaddress,omitempty"`
+
 	// Total volume of all trade in RUNE
 	TotalVolume *int64 `json:"totalVolume,omitempty"`
 

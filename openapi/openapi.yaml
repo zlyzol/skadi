@@ -116,6 +116,9 @@ components:
         timeRunning:
           type: string
           description: Running time
+        ipAddress:
+          type: string
+          description: Running Bot's public IP address
 
     TradeData:
       type: object
