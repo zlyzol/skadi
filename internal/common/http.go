@@ -25,8 +25,15 @@ func DoHttpRequest(req *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-func GetPublicIP() (string, error) {
-	var url string
+func GetPublicIP() string {
+	ip, err := getPublicIP()
+	if err != nil {
+		ip = "cannot get IP address: " + err.Error()
+	}
+	return ip
+}
+func getPublicIP() (string, error) {
+		var url string
 	// url = "http://" + ip + ":8080/v1/thorchain/pool_addresses"
 	url = "https://api.ipify.org/?format=json"
 	req, err := http.NewRequest("GET", url, nil)

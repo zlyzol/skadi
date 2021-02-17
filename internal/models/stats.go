@@ -7,4 +7,5 @@ type Stats struct {
 	TotalYield  float64 `json:"totalYield"`
 	AvgTrade    float64 `json:"avgTrade"`
 	TimeRunning string  `json:"timeRunning"`
+	IpAddress 	string  `json:"ipaddress"`
 }

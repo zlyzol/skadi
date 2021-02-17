@@ -21,6 +21,7 @@ func (bot *Bot) GetHealth() *models.HealthStatus {
 func (bot *Bot) GetStats() (*models.Stats, error) {
 	stats, err := bot.store.GetStats()
 	stats.TimeRunning = time.Since(bot.GetStartTime()).String()
+	stats.IpAddress = GetPublicIP()
 	if err != nil {
 		return nil, err
 	}

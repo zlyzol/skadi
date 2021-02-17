@@ -52,16 +52,10 @@ func tetik_swap() common.Uint {
 
 // Start bot
 func (bot *Bot) Start() error {
-	ip, err := common.GetPublicIP()
-	if err != nil {
-		ip, err = common.GetPublicIP()
-		if err != nil {
-			ip = "cannot get IP address: " + err.Error()
-		}
-	}
+	ip := common.GetPublicIP()
 	bot.logger.Info().Msgf("PUBLIC IP: %s)", ip)
 	bot.startTime = time.Now()
-	err = bot.connectExchanges()
+	err := bot.connectExchanges()
 	if err != nil {
 		return errors.Wrap(err, "failed to connect exchanges")
 	}

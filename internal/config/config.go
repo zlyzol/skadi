@@ -66,7 +66,7 @@ func applyDefaultConfig() {
 	viper.SetDefault("exchanges", ExchangesConfiguration{
 		"binance_dex": ExchangeConfiguration{Type: "binance-dex", AccountName: "key_files"},
 		"thorchain":   ExchangeConfiguration{Type: "thorchain", AccountName: "key_files", Parameters: map[string]string{"seed_url": "chaosnet-seed.thorchain.info"}},
-		////		"binance": ExchangeConfiguration{ Type: "binance", AccountName: "binance_api" },
+		"binance": ExchangeConfiguration{ Type: "binance", AccountName: "binance_api" },
 		//		"bitmax": ExchangeConfiguration{ Type: "bitmax", AccountName: "bitmax_api" },
 	})
 	viper.SetDefault("accounts", AccountsConfiguration{
