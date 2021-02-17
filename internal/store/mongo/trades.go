@@ -35,7 +35,7 @@ func (m *Mongo) GetTrades() (models.Trades, error) {
 	return results, nil
 }
 
-func (m *Mongo) InsertTrade(record *models.Trade) error {
+func (m *Mongo) InsertTrade(record models.Trade) error {
 	collection := m.db.Database(m.cfg.Database).Collection("trades")
 	_, err := collection.InsertOne(context.TODO(), record)
 	if err != nil {

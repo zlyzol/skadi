@@ -82,7 +82,7 @@ func (prey *Prey) process() {
 	ores := order.GetResult()
 	if ores.Err != nil {
 		prey.logger.Error().Err(ores.Err).Msg("prey 1-st order failed -> return")
-		pr.printEndLog()
+		pr.printEndLog(prey.h.store)
 		// refresh the orderbook
 		prey.h.RefreshOffers()
 		return
@@ -108,7 +108,7 @@ func (prey *Prey) process() {
 				prey.logger.Error().Err(err).Msg("prey 1-st order revert failed")
 			}
 			prey.logger.Error().Err(err).Msg("****************BALANCE ERROR - BALANCE 1. - SHOULD NOT HAPPEN")
-			pr.printEndLog()
+			pr.printEndLog(prey.h.store)
 			return	
 		}
 		alreadyBalanced = 1
@@ -151,7 +151,7 @@ func (prey *Prey) process() {
 			prey.logger.Error().Err(err).Msg("prey 1-st order revert failed")
 		}
 		*/
-		pr.printEndLog()
+		pr.printEndLog(prey.h.store)
 		return
 	} else {
 		prey.logger.Info().Msgf("REAL swap return %s", sres.Amount)
@@ -159,7 +159,7 @@ func (prey *Prey) process() {
 	time.Sleep(400 * time.Millisecond) // wait for swap result arrival into accont
 	exAcc, poolAcc := prey.h.ob.GetExchange().GetAccount(), prey.h.pool.GetExchange().GetAccount()
 	exAcc.Refresh(); if poolAcc != exAcc { poolAcc.Refresh() }
-	resultInRune := pr.printEndLog()
+	resultInRune := pr.printEndLog(prey.h.store)
 	err := prey.balanceAccounts(&ores, &sres, false, alreadyBalanced)
 	if err != nil {
 		prey.logger.Error().Err(err).Msg("****************BALANCE ERROR - BALANCE 3. - SHOULD NOT HAPPEN")
@@ -195,10 +195,10 @@ func getSideAmount(orderSide common.OrderSide, baseAmount, quoteAmount common.Ui
 	}
 	return side, amount
 }
-func (prey *Prey) balanceFirstAccounts(ores *common.Result/*, flip bool*/) error {
-	return prey.balanceAccounts(ores, &common.Result{}/*, flip*/, true, 2)
+func (prey *Prey) balanceFirstAccounts(ores *common.Result) error {
+	return prey.balanceAccounts(ores, &common.Result{}, true, 2)
 }
-func (prey *Prey) balanceAccounts(ores, sres *common.Result/*, flip bool*/, wait bool, alreadyBalanced uint8) (err error) {
+func (prey *Prey) balanceAccounts(ores, sres *common.Result, wait bool, alreadyBalanced uint8) (err error) {
 	exAcc := prey.h.ob.GetExchange().GetAccount()
 	poolAcc := prey.h.pool.GetExchange().GetAccount()
 	if exAcc != poolAcc {

@@ -10,7 +10,7 @@ import (
 type Store interface {
 	Ping() error
 
-	InsertTrade(record *models.Trade) error
+	InsertTrade(record models.Trade) error
 
 	GetStats() (models.Stats, error)
 	GetTrades() (models.Trades, error)

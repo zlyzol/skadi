@@ -7,6 +7,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gitlab.com/zlyzol/skadi/internal/common"
+	"gitlab.com/zlyzol/skadi/internal/store"
+
 )
 
 var Debug_do = false // true
@@ -42,6 +44,7 @@ type Hunter struct {
 	lastCheck		time.Time
 	lastYieldInfo	time.Time
 	balancer		*AccBalancer
+	store			store.Store 
 }
 
 func (bot *Bot) debug_fun() bool {
@@ -164,7 +167,7 @@ func (bot *Bot) startHunters() error {
 			}*/
 
 			balancer.addMarket(exm)
-			h, err := bot.NewHunter(ob, pool, balancer)
+			h, err := bot.NewHunter(ob, pool, balancer, bot.store)
 			if err != nil {
 				return err
 			}
@@ -188,7 +191,7 @@ func (bot *Bot) startHunters() error {
 }
 
 // NewHunter creates new hunter
-func (bot *Bot) NewHunter(ob *common.Orderbook, pool *common.Pool, balancer *AccBalancer) (*Hunter, error) {
+func (bot *Bot) NewHunter(ob *common.Orderbook, pool *common.Pool, balancer *AccBalancer, store store.Store) (*Hunter, error) {
 	h := Hunter {
 		logger:		log.With().Str("module", "hunter").Str("exchange", ob.GetExchange().GetName()).Str("market", ob.GetMarket().String()).Logger(),
 		atomicHunting:	0,
@@ -196,6 +199,7 @@ func (bot *Bot) NewHunter(ob *common.Orderbook, pool *common.Pool, balancer *Acc
 		ob:			ob,
 		pool:		pool,
 		balancer:	balancer,
+		store:		store,
 	}
 	return &h, nil
 }

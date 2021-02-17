@@ -105,6 +105,10 @@ components:
           type: integer
           format: int64
           description: Total volume of all trade in RUNE
+        totalYield:
+          type: integer
+          format: int64
+          description: Total yield since start in RUNE
         avgTrade:
           type: integer
           format: int64

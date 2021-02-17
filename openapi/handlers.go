@@ -51,7 +51,7 @@ func (h *Handlers) GetStats(ctx echo.Context) error {
 	return ctx.JSON(http.StatusOK, response)
 }
 
-// (GET /v1/stats)
+// (GET /v1/trades)
 func (h *Handlers) GetTrades(ctx echo.Context) error {
 	trades, err := h.bot.GetTrades()
 	if err != nil {
