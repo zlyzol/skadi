@@ -174,12 +174,12 @@ func (prey *Prey) process() {
 		prey.logger.Info().Msg("RESULT NEGATIVE")
 	}
 	if resultInRune < -5.0 {
-		prey.logger.Info().Msg("RESULT TOO NEGATIVE - PANIC")
+		prey.logger.Info().Msgf("RESULT TOO NEGATIVE (%f) - PANIC", resultInRune)
 		panic("RESULT TOO NEGATIVE - PANIC")
 	}
 	if pr.getGlobalResultInRune() < -10.0 {
-		prey.logger.Info().Msg("GLOBAL RESULT TOO NEGATIVE - PANIC")
-		panic("RESULT TOO NEGATIVE - PANIC")
+		prey.logger.Info().Msgf("GLOBAL RESULT TOO NEGATIVE (%f) - PANIC", pr.getGlobalResultInRune())
+		panic("GLOBAL RESULT TOO NEGATIVE - PANIC")
 	}
 	if waitForBalance2AndRebalance {
 		exAcc.Refresh(); poolAcc.Refresh()
