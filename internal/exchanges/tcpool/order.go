@@ -68,6 +68,7 @@ func (o *Order) GetResult() common.Result {
 	defer o.trader.acc.Refresh()
 	if o.result == nil {
 		o.result = &common.Result{}
+		o.result.QuoteAmount = o.amount
 		o.waitForResult()
 	}
 	return *o.result
@@ -105,7 +106,7 @@ func (o *Order) waitForResult() {
 	ticker := time.NewTicker(4 * time.Second)
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			return
 		case <-evch:
 			time.Sleep(50 * time.Millisecond)

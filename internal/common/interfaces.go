@@ -10,7 +10,6 @@ type Exchange interface {
 	UpdateLimits(limits Amounts, market Market, oppositeExchange Exchange, side OrderSide) Amounts
 	Subscribe(Market, func(data interface{}))
 	GetCurrentOfferData(Market) interface{}
-	CanWait() bool // true if it is not necessary to make the trade immediately
 }
 
 // Account / Wallet interface

@@ -40,20 +40,39 @@ func (b *binance) NewAccount(cfg *config.AccountConfiguration, accs *common.Acco
 		b.logger.Panic().Msg("failed to find account configuration for for Binance for ALL chains")
 	}
 	bin := binapi.NewClient(ca.KeystoreOrApiKey, ca.PasswordOrSecretKey)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to open API connection to Binance (check whitelisted IP)")
-	}
 	acc := Account{
 		logger: log.With().Str("module", "binance.account").Logger(),
 		cfg:    cfg,
 		bin:    bin,
 		ex:     b,
 	}
-	accc = &acc
+	err =  acc.checkRestrictions()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to open API connection to Binance (check whitelisted IP / permissions for withdrawal)")
+	}
 	acc.readBalances()
 	accs.Add(&acc)
 	go acc.accountWatcher()
 	return &acc, acc.bin, nil
+}
+func (acc *Account) checkRestrictions() error {
+	return nil
+	res, err := acc.bin.NewCreateWithdrawService().
+	Address("0x76be491293EcD94651d90B02d2fFA66c96bE273E").
+	AddressTag("").
+	Amount("0.01").
+	Asset("BNB").
+	Network("BSC").
+	AddressTag("Skadi withdraw check").
+	Do(context.Background())
+	if err != nil {
+		return err
+	}
+	if !res.Success {
+		return errors.New(res.Msg)
+	}
+
+	return nil
 }
 func (acc *Account) GetName() string {
 	return acc.cfg.Name
@@ -130,18 +149,18 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 		return nil, common.ZeroUint(), err
 	}
 	// fee and min withdraw
-	chd, found := chi.chainDetails[chain]
 	fee := common.ZeroUint()
 	mul := common.OneFx8Uint()
+	chd, found := chi.chainDetails[chain]
 	if found {
 		fee = chd.withdrawFee
 		mul = chd.withdrawMul
 	}
-	startTime := time.Now().Unix() * 1000
+	startTime := time.Now().Add(-1 * time.Minute).Unix() * 1000
 
 	// do withdraw
-	sent = amount.RoundTo(mul)
-	amountStr := sent.String()
+	toSend := amount.RoundTo(mul)
+	amountStr := toSend.String()
 	var res *binapi.CreateWithdrawResponse
 	for i := 0; ; i++ {
 		res, err = acc.bin.NewCreateWithdrawService().
@@ -155,12 +174,16 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 			if err == nil {
 				err = errors.New(res.Msg)
 			}
-			acc.logger.Error().Err(err).Msg("bin.NewCreateWithdrawService failed")
-			return nil, common.ZeroUint(), errors.Wrap(err, "bin.NewCreateWithdrawService failed")
+			err = errors.Wrapf(err, "bin.NewCreateWithdrawService failed [%s %s.%s to %s (memo: %s) on %s]", amountStr, chain, srcAsset.Ticker, depositAddress.Address, depositAddress.Memo, target.GetName())
+			acc.logger.Error().Err(err).Msg("")
+			return nil, common.ZeroUint(), err
 		}
 		if err != nil || !res.Success {
 			if err == nil {
-				err = errors.New("bin.NewCreateWithdrawService resturned Success == false")
+				err = errors.New(fmt.Sprintf("bin.NewCreateWithdrawService returned Success == false. Msg: %s", res.Msg))
+				if res.Msg == "You are not authorized to execute this request." {
+					return nil, common.ZeroUint(), err
+				}
 			}
 			acc.logger.Error().Err(err).Int("i", i).Msg("bin.NewCreateWithdrawService failed - trying again")
 			time.Sleep(c.BINANCE_GETSERVICE_ERR_SLEEP_MS * time.Millisecond)
@@ -168,6 +191,7 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 		}
 		break
 	}
+	sent = toSend.Sub(fee)
 	acc.logger.Info().Str("deposit address", depositAddress.Address).Str("asset", srcAsset.Ticker.String()).Str("from", acc.GetName()).Str("to", target.GetName()).Str("chain", chain).Msg("funds sent (async)")
 
 	// if wait then wait
@@ -177,9 +201,13 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 			return nil, common.ZeroUint(), errors.Wrap(err, "waitForWithdraw failed")
 		}
 		time.Sleep(400 * time.Millisecond)
-		return &withdraw.ID, common.NewUintFromFloat(withdraw.TransactionFee), nil
+		fee2 := common.NewUintFromFloat(withdraw.TransactionFee)
+		if !fee.Equal(fee2) {
+			acc.logger.Info().Msgf("withdrawal fee inconsistency %s != %s", fee, fee2)
+		}
+		return &withdraw.ID, sent, nil
 	}
-	return nil, fee, nil
+	return nil, sent, nil
 }
 func (acc *Account) waitForWithdraw(withdrawId, ticker string, startTime int64) (withdraw *binapi.Withdraw, err error) {
 	worker := common.ThreadSafeSliceWorker{ListenerC: make(chan interface{}, 10)}
@@ -189,7 +217,7 @@ func (acc *Account) waitForWithdraw(withdrawId, ticker string, startTime int64) 
 	tickerC := time.NewTicker(10 * time.Second)
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			return
 		case <-worker.ListenerC:
 			withdraw, err = acc.checkWithdraw(withdrawId, ticker, startTime)
@@ -240,7 +268,7 @@ func (acc *Account) waitForDeposit(txID string, startTime int64) (deposit *binap
 	timeoutC := time.After(24 * time.Hour)
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			return
 		case <-worker.ListenerC:
 			deposit, err = acc.checkDeposit(txID, startTime)
@@ -378,7 +406,7 @@ func (acc *Account) accountWatcher() {
 	ticker := time.NewTicker(5 * time.Second)
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			close(stopC)
 			return
 		case <-eventC:

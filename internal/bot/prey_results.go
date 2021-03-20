@@ -44,7 +44,6 @@ func newPreyResult(prey *Prey) *preyResults {
 		amount:		prey.amount,
 		expectYield:prey.expectYield,
 	}
-	/*
 	pr.start = common.Amounts{ 
 		BaseAmount:		pr.exAcc.GetBalance(pr.base),
 		QuoteAmount:	pr.exAcc.GetBalance(pr.quote),
@@ -53,7 +52,6 @@ func newPreyResult(prey *Prey) *preyResults {
 		pr.start.BaseAmount += pr.poolAcc.GetBalance(pr.base)
 		pr.start.QuoteAmount += pr.poolAcc.GetBalance(pr.quote)
 	}
-	*/
 	pr.printStartLog()
 	return &pr
 }
@@ -61,7 +59,7 @@ func (pr *preyResults) printStartLog() {
 	pr.logger.Info().Msg("****************************************")
 	pr.logger.Info().Msg(fmt.Sprintf("PREY PROCESSING STARTED %s %s/%s. expYield: %s", pr.exAcc.GetName(), pr.base.Ticker, pr.quote.Ticker, pr.expectYield))
 }
-func (pr *preyResults) printEndLog(store store.Store) float64 {
+func (pr *preyResults) printEndLog(store store.Store) {
 	pr.end = common.Amounts{ 
 		BaseAmount:		pr.exAcc.GetBalance(pr.base),
 		QuoteAmount:	pr.exAcc.GetBalance(pr.quote),
@@ -98,9 +96,15 @@ func (pr *preyResults) printEndLog(store store.Store) float64 {
 		Str(pr.base.Ticker.String(), fmt.Sprintf("%s -> %s (%.4f)", pr.start.BaseAmount, pr.end.BaseAmount, baseDiff)).
 		Str(pr.quote.Ticker.String(), fmt.Sprintf("%s -> %s (%.4f)", pr.start.QuoteAmount, pr.end.QuoteAmount, quoteDiff)).
 		Msg("prey processing result")
-	pr.logger.Info().Msgf("detail prey processing result: %s/%s (%s/%s): %+v", pr.exAcc.GetName(), pr.poolAcc.GetName(), pr.base.Ticker, pr.quote.Ticker, 0/*pr.debug*/)
+	//pr.logger.Info().Msgf("detail prey processing result: %s/%s (%s/%s): %+v", pr.exAcc.GetName(), pr.poolAcc.GetName(), pr.base.Ticker, pr.quote.Ticker, 0/*pr.debug*/)
 	pr.logger.Info().Msgf("PREY PROCESSING END %.4f / GLB: %.4f", pr.resultInRune, bigPlus100 / 100)
 	pr.logger.Info().Msg("****************************************")
+	if pr.resultInRune < -10 || bigPlus100 / 100 < -20 {
+		var a int
+		a = 0
+		_ = a 
+		//panic(0)
+	}
 
 	f, err := os.OpenFile("res.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err == nil {
@@ -108,9 +112,9 @@ func (pr *preyResults) printEndLog(store store.Store) float64 {
 		var s string
 		if pr.resultInRune == 0 {
 			amInRune := common.Oracle.GetRuneValueOf(pr.amount, pr.base)
-			s = fmt.Sprintf("%s (%s/%s): expired (expected trade amount: %s (RUNE), yield: %s)\n", nows, pr.base.Ticker, pr.quote.Ticker, amInRune, pr.expectYield)
+			s = fmt.Sprintf("%s (%s/%s) on %s: expired (expected trade amount: %s (RUNE), yield: %s)\n", nows, pr.base.Ticker, pr.quote.Ticker, pr.exAcc.GetName(), amInRune, pr.expectYield)
 		} else {
-			s = fmt.Sprintf("%s (%s/%s) (GLB: %.4f): plus %.4f, %s -> %s (%.4f), %s -> %s (%.4f)\n", nows, pr.base.Ticker, pr.quote.Ticker, bigPlus100 / 100, pr.resultInRune, pr.start.BaseAmount, pr.end.BaseAmount, baseDiff, pr.start.QuoteAmount, pr.end.QuoteAmount, quoteDiff)
+			s = fmt.Sprintf("%s (%s/%s) on %s (GLB: %.4f): plus %.4f, %s -> %s (%.4f), %s -> %s (%.4f)\n", nows, pr.base.Ticker, pr.quote.Ticker,  pr.exAcc.GetName(), bigPlus100 / 100, pr.resultInRune, pr.start.BaseAmount, pr.end.BaseAmount, baseDiff, pr.start.QuoteAmount, pr.end.QuoteAmount, quoteDiff)
 		}
 		f.WriteString(s)
 		f.Close()
@@ -126,5 +130,11 @@ func (pr *preyResults) printEndLog(store store.Store) float64 {
     	Debug:		"cmuk",
 	}
 	store.InsertTrade(trade)
+}
+
+func (pr *preyResults) getResultInRune() float64 {
 	return pr.resultInRune
+}
+func (pr *preyResults) getGlobalResultInRune() float64 {
+	return float64(atomic.LoadInt64(&global_bigPlus))
 }

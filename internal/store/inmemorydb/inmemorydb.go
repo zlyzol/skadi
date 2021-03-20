@@ -12,13 +12,11 @@ type InMemoryDb struct {
 	totalYield	int64
 	trades 		models.Trades
 }
-
 func NewClient() (*InMemoryDb, error) {
 	return &InMemoryDb{
 		trades: make(models.Trades, 0),
 	}, nil
 }
-
 func (m *InMemoryDb) Ping() error {
 	return nil
 }
@@ -36,7 +34,6 @@ func (m *InMemoryDb) GetStats() (models.Stats, error) {
 	}
 	return result, nil
 }
-
 func (m *InMemoryDb) GetTrades() (models.Trades, error) {
 	m.mux.Lock()
 	defer m.mux.Unlock()
@@ -52,7 +49,6 @@ func (m *InMemoryDb) GetTrades() (models.Trades, error) {
 	}
 	return result, nil
 }
-
 func (m *InMemoryDb) InsertTrade(trade models.Trade) error {
 	m.mux.Lock()
 	defer m.mux.Unlock()

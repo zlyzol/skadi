@@ -49,9 +49,6 @@ func NewExchange(excf *config.ExchangeConfiguration, accf *config.AccountConfigu
 func (b *bdex) GetName() string {
 	return "Binance DEX"
 }
-func (b *bdex) CanWait() bool { // true if it is not necessary to make the trade immediately
-	return false
-}
 func (b *bdex) GetAccount() common.Account {
 	var a common.Account
 	a = b.acc

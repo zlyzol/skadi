@@ -3,7 +3,6 @@ package bdex
 import (
 	"strings"
 	"time"
-	"fmt"
 
 	"github.com/binance-chain/go-sdk/client/websocket"
 	"github.com/pkg/errors"
@@ -57,11 +56,9 @@ func (o *Order) GetResult() common.Result {
 	if o.result.Err != nil { // if there was a previous error while order sending just return it
 		o.logger.Error().Err(o.result.Err).Msgf("order failed")
 	} else {
-		if o.side == common.OrderSideBUY {
-			o.logger.Info().Str("spent", o.result.QuoteAmount.String()).Str("got", o.result.Amount.String()).Str("price", o.result.AvgPrice.String()).Str("partial", fmt.Sprintf("%v",o.result.PartialFill)).Msgf("order successful")
-		} else {
-			o.logger.Info().Str("spent", o.result.Amount.String()).Str("got", o.result.QuoteAmount.String()).Str("price", o.result.AvgPrice.String()).Str("partial", fmt.Sprintf("%v",o.result.PartialFill)).Msgf("order successful")
-		}
+		o.logger.Info().Msgf("spent = %s, got = %s, price = %s, %s", o.side.IfBuy(o.result.QuoteAmount, o.result.Amount),
+							o.side.IfBuy(o.result.Amount, o.result.QuoteAmount),
+							o.result.AvgPrice, common.IfStr(o.result.PartialFill, "Partial Fill", "Full Fill"))
 	}
 	return *o.result
 }
@@ -109,7 +106,7 @@ func (o *Order) waitForResult() {
 	failed := 0
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			return
 		case evs := <-event:
 			for i := 0; i < len(evs); i++ {

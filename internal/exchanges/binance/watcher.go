@@ -22,7 +22,7 @@ type watcher struct {
 	market                       common.Market
 	onChange                     func(data interface{})
 	query                        *types.DepthQuery
-	atomicOrderbook              atomic.Value //common.OrderbookData
+	atomicOrderbook              atomic.Value //common.BidsAsks
 	chDepth                      chan struct{}
 	chDiff                       chan struct{}
 	chDepthStop, chPartDepthStop chan struct{}
@@ -40,27 +40,25 @@ func (b *binance) startWatcher(market common.Market, onChange func(data interfac
 		chDiff:   make(chan struct{}),
 		tickers:  fmt.Sprintf("%s%s", market.BaseAsset.Ticker, market.QuoteAsset.Ticker),
 	}
+	ob, err := watcher.readOrderbook()
+	if err == nil {
+		watcher.atomicOrderbook.Store(ob)
+	} else {
+		watcher.logger.Error().Err(err).Msg("watcher first orderbook read failed")
+		panic(0)
+	}
 	go watcher.watch()
 }
 func (w *watcher) watch() {
 	w.logger.Info().Msg("watcher loop started")
-	/*
-		ob, err := w.readOrderbook()
-		if err == nil {
-			debug_check_orderbook(ob, w.logger)
-			w.atomicOrderbook.Store(*ob)
-		} else { // if error, no problem, we continue, maybe next time we will read the orderbook properly
-			w.logger.Error().Err(err).Msg("readOrderbook failed")
-		}
-	*/
 	w.subsDepth()
 	w.subsPartialDepth()
 	w.check()
 	ticker := time.NewTicker(c.BINANCE_ORDERBOOK_CHECK_MS * time.Millisecond)
 	for {
 		select {
-		case <-common.Quit:
-			w.logger.Info().Msg("bdex exchange loop stopped on common.Quit signal")
+		case <-common.Stop:
+			w.logger.Info().Msg("bdex exchange loop stopped on common.Stop signal")
 			close(w.chDepthStop)
 			close(w.chPartDepthStop)
 			return

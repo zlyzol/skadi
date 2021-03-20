@@ -9,9 +9,17 @@ import (
 
 // Global Quit Channel
 var Quit = make(chan struct{})
+var Stop chan struct{}
 
 // Balances - account balances
 type Balances map[string]Uint
+func (balances Balances) Get(asset Asset) Uint{
+	ticker := asset.Ticker.String()
+	if v, ok := balances[ticker]; ok {
+		return v
+	}
+	return ZeroUint()
+}
 type Amounts struct {
 	BaseAmount, QuoteAmount Uint
 }
@@ -194,3 +202,4 @@ func (os OrderSide) String() string {if os == OrderSideBUY { return "BUY" } else
 func (os OrderSide) Invert() OrderSide {if os == OrderSideBUY { return OrderSideSELL } else { return OrderSideBUY }}
 func (os OrderSide) IfBuy(a, b Uint) Uint { if os == OrderSideBUY { return a } else { return b }}
 func StrToFloat(s string) float64 { f, _ := strconv.ParseFloat(s, 64); return f }
+func IfStr(c bool, a, b string) string { if c { return a } else { return b }}

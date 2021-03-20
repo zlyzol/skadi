@@ -85,7 +85,7 @@ func (h *Hunter) findPrey() *Prey {
 		return nil
 	}
 	if diff < c.MIN_PERC_DIFF || diff > c.MAX_PERC_DIFF {
-		h.logger.Info().Float64("diff %", diff).Str("ask", h.ob.GetEntry(ASK, 0).String()).Str("bid", h.ob.GetEntry(BID, 0).String()).Str("pool", h.pool.GetPrice().String()).Msg("Price diff % out of range")
+		//h.logger.Info().Float64("diff %", diff).Str("ask", h.ob.GetEntry(ASK, 0).String()).Str("bid", h.ob.GetEntry(BID, 0).String()).Str("pool", h.pool.GetPrice().String()).Msg("Price diff % out of range")
 		return nil
 	}
 	limits, _ := h.getAccLimits(side) // account funds limits
@@ -113,7 +113,7 @@ func (h *Hunter) findPrey() *Prey {
 		return NewPrey(side, am, lim, avg, yield, h)
 	} else {
 		h.logger.Debug().Msgf("Debug pool info 1 (%s / %s // %s)", h.ob.GetEntry(BID, 0), h.ob.GetEntry(ASK, 0), h.pool)
-		h.logger.Info().Msgf("diff is small (rune Am: %s, yield: %s)", runeAm, yield)
+		//h.logger.Info().Msgf("diff is small (rune Am: %s, yield: %s)", runeAm, yield)
 		if runeAm.IsZero() {
 			am1, runeAm1, avg1, yield1 := h.calcArbRes(ba, poolpr, side, h.pool, limits, func() *zerolog.Event { return h.logger.Debug() })
 			_, _, _, _ = am1, runeAm1, avg1, yield1 
@@ -230,10 +230,13 @@ func (h *Hunter) debug_noPreyCheck(ba common.OrderbookEntries, side common.Order
 		h.logger.Debug().Str("yield", yield.String()).Msg("yield too small")
 		return
 	}
+
+	sideAm := func(side common.OrderSide, am common.Uint) common.Uint { if side == common.OrderSideSELL { return am } else { return am.Mul(poolpr) }}
 	// if we are here, some limit is limiting us
 	
 	// yield is small just because of wallet amount (or global rune trade limit)
-	debug_secs := time.Now().Sub(h.lastCheck).Seconds()
+	debug_secs := time.Now().Sub(h.lastYieldInfo).Seconds()
+	h.lastYieldInfo = time.Now()
 	if debug_secs >= 30 {
 		var amLimits, runeAmLimits, yieldLimits common.Uint
 		var whatLimits string
@@ -242,20 +245,34 @@ func (h *Hunter) debug_noPreyCheck(ba common.OrderbookEntries, side common.Order
 			whatLimits = "global"
 		} else {
 			amLimits, runeAmLimits, yieldLimits = amAccLimits, runeAmAccLimits, yieldAccLimits
-			whatLimits = "wallet"
+			whatLimits = h.pool.GetExchange().GetAccount().GetName() + " wallet"
 		}
 		if yieldNoLimits.GTE(common.NewUintFromFloat(c.MIN_RUNE_YIELD)) && amNoLimits.GTE(c.MIN_RUNE_ARB_AMOUNT) {
-			s := fmt.Sprintf("%s limit stop (no arb): %s: %s->%s (=%s) (in rune: %s->%s (=%s)) yield: %s->%s (=%s)", whatLimits, h.market, amNoLimits, am, amLimits,
-			runeAmNoLimits, runeAm, runeAmLimits, yieldNoLimits, yield, yieldLimits)
+			var amTicker common.Ticker
+			if side == common.OrderSideBUY {
+				amTicker = h.market.QuoteAsset.Ticker
+			} else {
+				amTicker = h.market.BaseAsset.Ticker
+			}
+			s := fmt.Sprintf("%s limit stop (no arb): %s (%s): %s: %s->%s (in rune: %s->%s) yield: %s->%s", 
+							whatLimits, h.market, side, amTicker, sideAm(side, amNoLimits), sideAm(side, amLimits),
+							runeAmNoLimits, runeAmLimits, yieldNoLimits, yieldLimits)
 			h.logger.Info().Msg(s)
 			debug_saveInfo(s)
+
 			debug_s1 := fmt.Sprintf("%s", amLimits)
 			debug_s2 := fmt.Sprintf("%s", am)
 			if debug_s1 != debug_s2 {
-				h.logger.Info().Msg("Strange, amounts should be equal")
+				h.logger.Info().Msg("Strange, amounts should be equal:")
+				s := fmt.Sprintf("%s limit stop (no arb): %s (%s): %s: %s->%s (shoud be = %s) (in rune: %s->%s (should be = %s)) yield: %s->%s (should be = %s)", 
+				whatLimits, h.market, side, amTicker, sideAm(side, amNoLimits), sideAm(side, am), sideAm(side, amLimits),
+				runeAmNoLimits, runeAm, runeAmLimits, yieldNoLimits, yield, yieldLimits)
+				h.logger.Info().Msg(s)
+				debug_saveInfo(s)
 			}
 			return
 		}
+		/*
 		base := h.ob.GetMarket().BaseAsset
 		quote := h.ob.GetMarket().QuoteAsset
 		qam, qamNoLimits := am.Mul(poolpr), amNoLimits.Mul(poolpr)	
@@ -282,7 +299,7 @@ func (h *Hunter) debug_noPreyCheck(ba common.OrderbookEntries, side common.Order
 		h.logger.Info().Msgf("not enough %s on %s, have [%s] / need [%s]", t, exo.GetExchange().GetName(), am1, am2)
 		debug_saveInfo(fmt.Sprintf("small account stop (%s): not enough %s on %s, have [%s] / need [%s]", h.market, t, exo.GetExchange().GetName(), am1, am2))
 		h.logger.Debug().Str("yield / yieldNoLimits", yield.String() + " / " + yieldNoLimits.String()).Msg("yield too small but could be OK")
-		h.lastYieldInfo = time.Now()
+		*/
 	}
 }
 

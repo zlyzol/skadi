@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gitlab.com/zlyzol/skadi/internal/common"
-	"gitlab.com/zlyzol/skadi/internal/c"
 	"gitlab.com/zlyzol/skadi/internal/exchanges/binance/api"
 )
 
@@ -83,7 +82,7 @@ func (t *Trader) checkMinNotional(pa common.PA) error {
 	return nil
 }
 func (t *Trader) applyTraderFee(amount *common.Uint) {
-	//coef := common.NewUint(100).Sub(common.NewUintFromFloat(c.BINANCE_LIMIT_ORDER_FEE)).Quo(common.NewUint(100))
-	coef := common.NewUintFromFloat(c.BINANCE_LIMIT_ORDER_FEE)
-	*amount = amount.Mul(coef)
+	return // trader fees are paid from BNB wallet
+	//coef := common.OneUint().Sub(common.NewUintFromFloat(c.BINANCE_LIMIT_ORDER_FEE))
+	//*amount = amount.Mul(coef)
 }

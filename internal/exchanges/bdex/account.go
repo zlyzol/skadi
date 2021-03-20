@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 	"sync/atomic"
+	"sync"
 
 	"gitlab.com/zlyzol/skadi/internal/common"
 	"gitlab.com/zlyzol/skadi/internal/c"
@@ -34,6 +35,8 @@ type Account struct {
 	bech32   types.AccAddress
 	key      keys.KeyManager // Binance DEX wallet
 	listeners	common.ThreadSafeSlice
+	muxSequence	sync.Mutex
+
 }
 func (b *bdex) NewAccount(cfg *config.AccountConfiguration, accs *common.Accounts) (*Account, error) {
 	ea, ok := accs.Get(cfg.Name)
@@ -75,7 +78,7 @@ func (acc *Account) GetBalance(asset common.Asset) common.Uint {
 	if v, ok := balances[ticker]; ok {
 		return v
 	}
-	acc.logger.Info().Msgf("asset ticker %s not found in balances, returning zero amount", asset.Ticker)
+	//acc.logger.Info().Msgf("asset ticker %s not found in balances, returning zero amount", asset.Ticker)
 	return common.ZeroUint()
 }
 func (acc *Account) GetBalances() common.Balances {
@@ -117,16 +120,25 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 		ToAddr: toAddr,
 		Coins:  types.Coins{types.Coin{Denom: srcAsset.Symbol.String(), Amount: amount.Fx8Int64()}},
 	}}
-	resSend, err := acc.bdex.dex.SendToken(msgs, true, transaction.WithMemo(depositAddress.Memo))
+	//resSend, err := acc.bdex.dex.SendToken(msgs, true, transaction.WithMemo(depositAddress.Memo))
+	acc.sequenceLock()
+	acc.logger.Info().Msgf("Current sequence is %v", acc.sequence)
+	resSend, err := acc.bdex.dex.SendToken(msgs, true, transaction.WithMemo(depositAddress.Memo), transaction.WithAcNumAndSequence(acc.number, acc.sequence))
 	if err != nil {
-		for i := 0; i < c.BNB_SEND_TOKEN_INV_SEQ_TRY_CNT && strings.EqualFold(err.Error(), "Invalid sequence."); i++ {
-			seq, num := acc.sequenceInc()
-			resSend, err = acc.bdex.dex.SendToken(msgs, true, transaction.WithMemo(depositAddress.Memo), transaction.WithAcNumAndSequence(num, seq+1))
+		for i := 0; i < c.BNB_SEND_TOKEN_INV_SEQ_TRY_CNT && strings.Contains(strings.ToLower(err.Error()), "invalid sequence."); i++ {
+			acc.sequence++
+			acc.logger.Info().Msgf("Incrementing after Invalid sequence, new sequence is %v", acc.sequence)
+			resSend, err = acc.bdex.dex.SendToken(msgs, true, transaction.WithMemo(depositAddress.Memo), transaction.WithAcNumAndSequence(acc.number, acc.sequence))
 			if err == nil {
+				acc.logger.Info().Msg("Incrementing sequence was successfull")
 				break
 			}
+			acc.logger.Info().Msgf("Still error (%s-th / %s) after Incrementing after Invalid sequence, new sequence %s", i + 1, c.BNB_SEND_TOKEN_INV_SEQ_TRY_CNT, err)
 		}
+	} else {
+		acc.logger.Info().Msg("Current sequence was ok")
 	}
+	acc.sequenceUnlock()
 	if err != nil || !resSend.Ok {
 		if err == nil {
 			err = errors.New("bdex accoun SendToken result Ok is false")
@@ -147,10 +159,10 @@ func (acc *Account) Send(amount common.Uint, srcAsset common.Asset, target commo
 		err := target.WaitForDeposit(resSend.TxCommitResult.Hash)
 		if err != nil {
 			acc.logger.Error().Err(err).Str("hash", resSend.TxCommitResult.Hash).Msg("wait for deposit failed")
-	
+			return &resSend.Hash, amount, err
 		}
 	}
-	return &resSend.Hash, common.ZeroUint(), nil
+	return &resSend.Hash, amount, nil
 }
 func (acc *Account) WaitForDeposit(hash string) error {
 	return nil // Binance chain tx is immediate
@@ -174,8 +186,10 @@ func (acc *Account) readBalances() common.Balances {
 		}
 		balances[as.Ticker.String()] = common.NewUintFromFx8(coin.Free)
 	}
-	atomic.StoreInt64(&acc.number, balance.Number)
-	atomic.StoreInt64(&acc.sequence, balance.Sequence)
+	acc.muxSequence.Lock()
+	acc.number = balance.Number
+	acc.sequence = balance.Sequence
+	acc.muxSequence.Unlock()
 	acc.atomicBalances.Store(balances)
 
 	acc.logger.Debug().Msgf("Account balances read: %+v", balances)
@@ -192,22 +206,24 @@ func (acc *Account) getTargetDepositAddress(srcAsset common.Asset, target common
 	}
 	return &addr, nil
 }
-func (acc *Account) sequenceInc() (sequence int64, number int64) {
-	atomic.AddInt64(&acc.sequence, 1)
-	sequence = atomic.LoadInt64(&acc.sequence)
-	number = atomic.LoadInt64(&acc.number)
-	return sequence, number
+func (acc *Account) sequenceLock() (sequence int64, number int64) {
+	acc.muxSequence.Lock()
+	return acc.sequence, acc.number
+}
+func (acc *Account) sequenceUnlock() {
+	acc.sequence += 1
+	acc.muxSequence.Unlock()
 }
 func (acc *Account) accountWatcher() {
 	eventC := make(chan struct{}, 10) // account event receiver channel
 	ticker := time.NewTicker(5 * time.Second)
-	err := acc.GetDex().SubscribeAccountEvent(acc.wallet, common.Quit, func(event *websocket.AccountEvent) { eventC <- struct{}{} }, nil, nil)
+	err := acc.GetDex().SubscribeAccountEvent(acc.wallet, common.Stop, func(event *websocket.AccountEvent) { eventC <- struct{}{} }, nil, nil)
 	if err != nil {
 		acc.logger.Error().Err(err).Msg("bdex SubscribeAccountEvent failed")
 	}
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			return
 		case <-eventC:
 			acc.logger.Info().Msg("bdex balance Update event")

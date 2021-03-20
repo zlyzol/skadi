@@ -23,16 +23,15 @@ func (bot *Bot) connectExchanges() error {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		excf := bot.cfg.Exchanges[k]
-		accf, ok := bot.cfg.Accounts[excf.AccountName]
+		excCfg := bot.cfg.Exchanges[k]
+		accCfg, ok := bot.cfg.Accounts[excCfg.AccountName]
 		if !ok { 
-			bot.logger.Panic().Msg("config error: account not found " +  excf.AccountName) 
+			bot.logger.Panic().Msg("config error: account not found " +  excCfg.AccountName) 
 		}
-		if err := bot.connectExchange(&excf, &accf); err != nil { return err }
+		if err := bot.connectExchange(&excCfg, &accCfg); err != nil { return err }
 	}
 	return nil
 }
-
 // connectExchange - connects/opens/configures exchange and opens wallets
 func (bot *Bot) connectExchange(excf *config.ExchangeConfiguration, accf *config.AccountConfiguration) error {
 	var ex common.Exchange
@@ -59,5 +58,11 @@ func (bot *Bot) connectExchange(excf *config.ExchangeConfiguration, accf *config
 		return err
 	}
 	bot.exchanges[extype] = ex
+	bot.WalletChecker.addAccount(ex.GetAccount())
 	return nil
 }
+// disconnectExchanges - connects/opens/configures exchange
+func (bot *Bot) disconnectExchanges() error {
+	return nil
+}
+

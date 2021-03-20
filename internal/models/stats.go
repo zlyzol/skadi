@@ -8,4 +8,5 @@ type Stats struct {
 	AvgTrade    float64 `json:"avgTrade"`
 	TimeRunning string  `json:"timeRunning"`
 	IpAddress 	string  `json:"ipaddress"`
+	Status		string  `json:"status"`
 }

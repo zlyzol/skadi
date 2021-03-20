@@ -4,6 +4,7 @@ import (
 
 	//	"github.com/ethereum/go-ethereum/p2p"
 	//	"github.com/pkg/errors"
+
 	"time"
 
 	"github.com/pkg/errors"
@@ -45,11 +46,12 @@ func NewPrey(side common.OrderSide, amount, lim, avg, expectYield common.Uint, h
 	return &prey
 }
 
-type MockSwapper struct {}
+type MockSwapper struct { pool *common.Pool }
 func (mt MockSwapper) Swap(side common.SwapTo, amount, limit common.Uint) common.Order { 
 	oside := common.OrderSideSELL
 	if side == common.SwapToQuote { oside = common.OrderSideBUY }
-	return MockOrder{side: oside, amount: amount, limit: limit} 
+	estimated := mt.pool.GetSwapReturn(amount, side)
+	return MockOrder{side: oside, amount: estimated, limit: limit} 
 }
 type MockTrader struct {}
 func (mt MockTrader) Trade(side common.OrderSide, amount, limit common.Uint) common.Order { return MockOrder{side: side, amount: amount, limit: limit} }
@@ -74,21 +76,20 @@ func (prey *Prey) process() {
 	swapper := prey.h.pool.GetSwapper()
 
 	if Debug_do {
-		trader = MockTrader{} // DEBUG
-		swapper = MockSwapper{}
+		if Debug_trader { trader = MockTrader{} }
+		if Debug_swapper { swapper = MockSwapper{pool: prey.h.pool} }
 	}
 	var order, swap common.Order
 	order = trader.Trade(prey.side, prey.amount, prey.limSellPrice)
+	time.Sleep(400 * time.Millisecond) // wait for swap result arrival into accont
 	ores := order.GetResult()
 	if ores.Err != nil {
 		prey.logger.Error().Err(ores.Err).Msg("prey 1-st order failed -> return")
 		pr.printEndLog(prey.h.store)
-		// refresh the orderbook
-		prey.h.RefreshOffers()
 		return
 	}
 	//flip := prey.h.pool.IsFlipped()
-	side, amount := getSideAmount(prey.side, ores.Amount, ores.QuoteAmount/*, flip*/)
+	side, amount := getSideAmount(prey.side, ores.Amount, ores.QuoteAmount)
 	var runeAm common.Uint
 	/*if flip {
 		runeAm = common.Oracle.GetRuneValueOf(amount, side.Invert().SrcAsset(prey.h.ob.GetMarket()))
@@ -98,10 +99,12 @@ func (prey *Prey) process() {
 	if runeAm < 5 {
 		err := errors.Errorf("1. order result amount in RUNE is less than 5 RUNE -> cancelling arb (bought/sold asset remains as is)")
 		prey.logger.Error().Err(err).Msg("cancel")
+		return
 	}
 	var alreadyBalanced uint8
 	if !prey.enoughFunds(side, amount) {
-		err := prey.balanceFirstAccounts(&ores/*, flip*/)
+		err := prey.balanceFirstAccounts(&ores)
+		_, amount = getSideAmount(prey.side, ores.Amount, ores.QuoteAmount)
 		if err != nil {
 			err := order.Revert()
 			if err != nil {
@@ -159,21 +162,31 @@ func (prey *Prey) process() {
 	time.Sleep(400 * time.Millisecond) // wait for swap result arrival into accont
 	exAcc, poolAcc := prey.h.ob.GetExchange().GetAccount(), prey.h.pool.GetExchange().GetAccount()
 	exAcc.Refresh(); if poolAcc != exAcc { poolAcc.Refresh() }
-	resultInRune := pr.printEndLog(prey.h.store)
-	err := prey.balanceAccounts(&ores, &sres, false, alreadyBalanced)
+	pr.printEndLog(prey.h.store)
+	resultInRune := pr.getResultInRune()
+	prey.logger.Info().Msgf("RESULT IN RUNE: %f", resultInRune)
+	waitForBalance2AndRebalance := false
+	err := prey.balanceAccounts(&ores, &sres, waitForBalance2AndRebalance, alreadyBalanced)
 	if err != nil {
 		prey.logger.Error().Err(err).Msg("****************BALANCE ERROR - BALANCE 3. - SHOULD NOT HAPPEN")
 	}
-	if resultInRune < -20 {
-		pr.logger.Info().Msg("RESULT NEGATIVE")
+	if resultInRune < 0 {
+		prey.logger.Info().Msg("RESULT NEGATIVE")
 	}
-	if resultInRune < -20 {
-		pr.logger.Info().Msg("RESULT TOO NEGATIVE - PANIC")
+	if resultInRune < -5.0 {
+		prey.logger.Info().Msg("RESULT TOO NEGATIVE - PANIC")
 		panic("RESULT TOO NEGATIVE - PANIC")
 	}
-	err = prey.h.balancer.balanceMarket(exAcc, poolAcc, prey.h.ob.GetMarket())
-	if err != nil {
-		prey.logger.Error().Err(err).Msg("****************BALANCE ERROR - BALANCE 4. - SHOULD NOT HAPPEN")
+	if pr.getGlobalResultInRune() < -10.0 {
+		prey.logger.Info().Msg("GLOBAL RESULT TOO NEGATIVE - PANIC")
+		panic("RESULT TOO NEGATIVE - PANIC")
+	}
+	if waitForBalance2AndRebalance {
+		exAcc.Refresh(); poolAcc.Refresh()
+		err = prey.h.balancer.balanceMarket(exAcc, poolAcc, prey.h.ob.GetMarket())
+		if err != nil {
+			prey.logger.Error().Err(err).Msg("****************BALANCE ERROR - BALANCE 4. - SHOULD NOT HAPPEN")
+		}
 	}
 }
 func getSideAmount(orderSide common.OrderSide, baseAmount, quoteAmount common.Uint/*, flip bool*/) (side common.SwapTo, amount common.Uint) {
@@ -218,7 +231,7 @@ func (prey *Prey) balanceAccounts(ores, sres *common.Result, wait bool, alreadyB
 		} else {
 			src = srcBaseAsset
 			sent1, sent2 = &ores.Amount, &sres.QuoteAmount
-			am1, am2 = ores.Amount, sres.QuoteAmount
+			am1, am2 = ores.Amount, sres.Amount
 			dst = dstQuoteAsset//; if flip { dst = dstBaseAsset }
 		}
 		var sent common.Uint
@@ -226,7 +239,9 @@ func (prey *Prey) balanceAccounts(ores, sres *common.Result, wait bool, alreadyB
 			prey.logger.Info().Msgf("Balancing (1) ex -> pool %s %s", am1, src.Ticker)
 			_, sent, err = exAcc.Send(am1, src, poolAcc, wait) 
 			if err != nil {
-				prey.logger.Error().Err(err).Msgf("Balancing (1) ERROR ex -> pool %s %s", am1, src.Ticker)
+				err = errors.Wrapf(err, "Balancing (1) ERROR ex -> pool %s %s", am1, src.Ticker)
+				prey.logger.Error().Err(err).Msg("error")	
+				panic(0)
 			} else {
 				prey.logger.Info().Msgf("Balancing (1) SUCCESS ex -> pool %s (sent %s) %s", am1, sent, src.Ticker)
 			}
@@ -235,17 +250,24 @@ func (prey *Prey) balanceAccounts(ores, sres *common.Result, wait bool, alreadyB
 		if alreadyBalanced & 2 == 0 { 
 			prey.logger.Info().Msgf("Balancing (2) ex <- pool %s %s", am2, dst.Ticker)
 			_, sent, err1 = poolAcc.Send(am2, dst, exAcc, wait) 
-			if err != nil {
-				prey.logger.Error().Err(err).Msgf("Balancing (2) ERROR ex -> pool %s %s", am2, dst.Ticker)
+			if err1 != nil {
+				err1 = errors.Wrapf(err1, "Balancing (2) ERROR ex -> pool %s %s", am2, dst.Ticker)
+				prey.logger.Error().Err(err1).Msg("error")
+				panic(0)
 			} else {
 				prey.logger.Info().Msgf("Balancing (2) SUCCESS ex -> pool %s (sent %s) %s", am2, sent, dst.Ticker)
 			}
 			*sent2 = sent
 		}
-		if err1 != nil { err = err1 }
+		if err != nil && err1 != nil {
+			err = errors.Wrapf(err, "%s", err1)
+		} else if err == nil && err1 != nil {
+			err = err1
+		}
 		if err != nil {
 			err = errors.Wrap(err, "failed to send rebalance funds after arb trade")
 			prey.logger.Error().Err(err).Msg("error")
+			panic(0)
 		}
 	}
 	return err
@@ -262,6 +284,6 @@ func (prey *Prey) enoughFunds(side common.SwapTo, amount common.Uint) (enough bo
 		a = prey.h.pool.GetMarket().BaseAsset
 	}
 	enough = poolAcc.GetBalance(a).GTE(amount)
-	prey.logger.Info().Msgf("enough? this is %t: %s >= %s", enough, poolAcc.GetBalance(a), amount)
+	prey.logger.Info().Msgf(common.IfStr(enough, "We have enough %s on other wallet (needed = %s, have = %s)", "We have NOT enough %s on other wallet (needed = %s, have = %s)"), a.Ticker, amount, poolAcc.GetBalance(a))
 	return enough
 }

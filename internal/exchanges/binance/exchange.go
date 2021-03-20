@@ -37,9 +37,6 @@ func NewExchange(excf *config.ExchangeConfiguration, accf *config.AccountConfigu
 func (b *binance) GetName() string {
 	return "Binance"
 }
-func (b *binance) CanWait() bool { // true if it is not necessary to make the trade immediately
-	return false
-}
 func (b *binance) GetAccount() common.Account {
 	return b.acc
 }

@@ -3,8 +3,11 @@ package bot
 import (
 
 	//	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/pkg/errors"
+	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -34,7 +37,9 @@ func shouldBalance(ticker common.Ticker, ams amounts) bool {
 	lim := common.NewUintFromFloat((100.0 - c.DO_BALANCE_MIN_DIFF_PERC) / 100.0)
 	if quo.GT(lim) { return false }
 	asset, _ := common.NewAsset(ticker.String())
-	if common.Oracle.GetRuneValueOf(max, asset).LT(common.NewUint(c.DO_BALANCE_MIN_AMOUNT_RUNE)) { return false }
+	inRune := common.Oracle.GetRuneValueOf(max, asset)
+	if inRune.IsZero() { return false }
+	if inRune.LT(common.NewUint(c.DO_BALANCE_MIN_AMOUNT_RUNE)) { return false }
 	return true
 }
 func (ab *AccBalancer) addMarket(market common.Market) {
@@ -71,13 +76,25 @@ func (ab *AccBalancer) balanceAll(acc1, acc2 common.Account) error {
 			assets[ticker] = amounts{ am1: 0, am2: am }
 		}
 	}
+	var wg sync.WaitGroup
 	for ticker, ams := range assets {
+		if ams.am1.Equal(ams.am2) { continue }
 		if !shouldBalance(ticker, ams) { continue }
-		err := ab.balance(acc1, acc2, ticker, ams)
-		if err != nil {
-			ab.logger.Error().Err(err).Msgf("cannot balance %s", ticker)
-		}
+		wg.Add(1)
+		go func(acc1, acc2 common.Account, ticker common.Ticker, ams amounts) {
+			defer wg.Done()
+			ab.logger.Info().Msgf("Blancing Start %s", ticker)
+			err := ab.balance(acc1, acc2, ticker, ams)
+			if err != nil {
+				ab.logger.Error().Err(err).Msgf("Blancing error %s", ticker)
+			}
+			ab.logger.Info().Msgf("Blancing End %s", ticker)
+		}(acc1, acc2, ticker, ams)
+		time.Sleep(100 * time.Millisecond) // API rate limit
 	}
+	ab.logger.Info().Msgf("Blancing Waiting")
+	wg.Wait()
+	ab.logger.Info().Msgf("Blancing End - All Balanced")
 	return nil
 }
 func (ab *AccBalancer) balanceMarket(acc1, acc2 common.Account, market common.Market) error {
@@ -119,6 +136,10 @@ func (ab *AccBalancer) balance(acc1, acc2 common.Account, ticker common.Ticker, 
 	am := (max.Sub(min)).Quo(2)
 	asset, _ := common.NewAsset(ticker.String())
 	ab.logger.Info().Msgf("balancig %s %s from %s to %s", am, ticker, from.GetName(), to.GetName())
-	_, _, err := from.Send(am, asset, to, true) 
-	return errors.Wrapf(err, "failed balancig %s %s from %s to %s", am, ticker, from.GetName(), to.GetName())
+	_, _, err := from.Send(am, asset, to, true)
+	if err != nil {
+		ab.logger.Error().Err(err).Msgf("failed balancig %s %s from %s to %s", am, ticker, from.GetName(), to.GetName())
+		return errors.Wrapf(err, "failed balancig %s %s from %s to %s", am, ticker, from.GetName(), to.GetName())
+	}
+	return nil
 }

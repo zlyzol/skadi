@@ -4,12 +4,13 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-//	"golang.org/x/tools/go/analysis/passes/nilfunc"
+//	"google.golang.org/genproto/googleapis/rpc/status"
+	//	"golang.org/x/tools/go/analysis/passes/nilfunc"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"gitlab.com/zlyzol/skadi/internal/config"
 	"gitlab.com/zlyzol/skadi/internal/common"
+	"gitlab.com/zlyzol/skadi/internal/config"
 	"gitlab.com/zlyzol/skadi/internal/store"
 )
 
@@ -20,17 +21,34 @@ type Bot struct {
 	startTime	time.Time
 	exchanges	map[string]common.Exchange
 	accounts	*common.Accounts
+	hunters		[]*Hunter
+	status		int8
+	statusError	error
+	WalletChecker	*WalletChecker
+	syncer			*HunterSyncer
 }
+var BotStatus = struct {
+	Starting	int8
+	Running		int8
+	Stopped		int8
+	Error		int8
+} {0,1,2,3}
 
 // NewUsecase initiate a new Usecase.
 func NewBot(store store.Store, cfg *config.Configuration) (*Bot, error) {
 	if cfg == nil {
 		return nil, errors.New("conf can't be nil")
 	}
+	syncer := &HunterSyncer{
+		HUNT_SYNC_ONE: true,
+		AtomicHUNT_SYNC_ONE: 1, // hunting disabled for now
+	}
 	bot := Bot{
 		cfg:  cfg,
 		logger:	log.With().Str("module", "bot").Logger(),
 		store: store,
+		syncer: syncer,
+		WalletChecker: NewWalletChecker(syncer),
 	}
 	return &bot, nil
 }
@@ -49,7 +67,11 @@ func tetik_swap() common.Uint {
 	_ = ret	
 	return ret
 }
-
+// Stop bot
+func (bot *Bot) Stop() error {
+	err := bot.disconnectExchanges()
+	return err
+}
 // Start bot
 func (bot *Bot) Start() error {
 	ip := common.GetPublicIP()
@@ -57,23 +79,54 @@ func (bot *Bot) Start() error {
 	bot.startTime = time.Now()
 	err := bot.connectExchanges()
 	if err != nil {
-		return errors.Wrap(err, "failed to connect exchanges")
+		bot.status = BotStatus.Error
+		bot.statusError = errors.Wrap(err, "failed to connect exchanges")
+		return bot.statusError
 	}
-	err = bot.startHunters()
+	bot.WalletChecker.start()
+	return bot.StartHunters()
+}
+// StartHunters bot
+func (bot *Bot) StartHunters() error {
+	if 	bot.status == BotStatus.Running {
+		return nil
+	}
+	bot.status = BotStatus.Starting
+	err := bot.startHunters()
 	if err != nil {
-		return errors.Wrap(err, "failed to start hunters")
+		bot.status = BotStatus.Error
+		bot.statusError = errors.Wrap(err, "failed to start hunters")
+		return bot.statusError
 	}
-	return err
+	bot.status = BotStatus.Running
+	bot.statusError = nil
+	return bot.statusError
 }
-
 // Stop bot
-func (bot *Bot) Stop() error {
+func (bot *Bot) StopHunters() error {
+	if 	bot.status == BotStatus.Stopped {
+		return nil
+	}
 	err := bot.stopHunters()
-	return err
+	if err != nil {
+		bot.status = BotStatus.Error
+		bot.statusError = errors.Wrap(err, "failed to start hunters")
+		return bot.statusError
+	}
+	bot.status = BotStatus.Stopped
+	bot.statusError = nil
+	return bot.statusError
 }
-
-// StopScanner stops the hunters.
-func (bot *Bot) stopHunters() error {
-	return nil // hunters are stopped by common.Quit channel close
+// Get Bot Status
+func (bot *Bot) GetStatus() string {
+	if bot.status == BotStatus.Running {
+		return "running"
+	} else if bot.status == BotStatus.Stopped {
+		return "stopped"
+	} else if bot.status == BotStatus.Starting {
+		return "starting"
+	} else if bot.status == BotStatus.Error {
+		return "error: " + bot.statusError.Error()
+	}
+	return "unknown"
 }
-

@@ -50,8 +50,8 @@ func (w *watcher) watch() {
 	ticker := time.NewTicker(c.TCPOOL_ORDERBOOK_CHECK_MS * time.Millisecond)
 	for {
 		select {
-		case <-common.Quit:
-			w.logger.Info().Msg("tcpool exchange loop stopped on common.Quit signal")
+		case <-common.Stop:
+			w.logger.Info().Msg("tcpool exchange loop stopped on common.Stop signal")
 			return
 		case depths := <-w.refreshC:
 			if depths.IsEmpty() {
@@ -137,7 +137,7 @@ func (w *watcher) subcribe(onChange func(common.Amounts)) {
 	w.subscribers.Push(&worker)
 	for {
 		select {
-		case <-common.Quit:
+		case <-common.Stop:
 			return
 		case depths := <-worker.ListenerC:
 			onChange(depths.(common.Amounts))

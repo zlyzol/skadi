@@ -17,6 +17,7 @@ require (
 	//	github.com/ziflex/lecho v1.2.0 // indirect
 	github.com/ziflex/lecho/v2 v2.0.0
 	go.mongodb.org/mongo-driver v1.3.4
+	google.golang.org/genproto v0.0.0-20190425155659-357c62f0e4bb
 //	golang.org/x/tools v0.0.0-20191125144606-a911d9008d1f
 )
 

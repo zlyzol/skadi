@@ -2,6 +2,7 @@ package bot
 
 import (
 	"sync/atomic"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -11,19 +12,23 @@ import (
 
 )
 
-var Debug_do = false // true
+var Debug_do = false //true
+var Debug_trader, Debug_swapper = false, false
 var Debug_ex = "Binance" // "Binance DEX"
-var Debug_bt = "COTI"
+var Debug_bt = "ANKR"
 var Debug_qt = "USDT"
 var Debug_prey *Prey
 var Debug_side = common.OrderSideBUY
-var Debug_am = 4000.1
-var Debug_pr = 0.06739
+var Debug_am = 977.0
+var Debug_pr = 0.073
 
-
+type HunterSyncer struct {
 // these two variables are used oly for debugging - theay enable only one hunting (prey processing) at a time
-var HUNT_SYNC_ONE = true
-var atomicHUNT_SYNC_ONE int32 = 0
+	HUNT_SYNC_ONE 			bool
+	AtomicHUNT_SYNC_ONE		int32
+	AtomicHUNTER_BLOCKED	int32
+	MuxHUNTERS 				sync.Mutex
+}
 
 /*
 type hunterMarket struct {
@@ -45,6 +50,7 @@ type Hunter struct {
 	lastYieldInfo	time.Time
 	balancer		*AccBalancer
 	store			store.Store 
+	syncer			*HunterSyncer
 }
 
 func (bot *Bot) debug_fun() bool {
@@ -74,15 +80,20 @@ func (bot *Bot) debug_fun() bool {
 	
 	return true
 }
+// StopHunters stops the hunters.
+func (bot *Bot) stopHunters() error {
+	close(common.Stop)
+	bot.hunters = nil
+	return nil // hunters are stopped by common.Stop channel close
+}
 // StartHunters starts the bot's arb hunters.
 func (bot *Bot) startHunters() error {
-
 	if false && bot.debug_fun() {
 		return nil
 	}
-
+	common.Stop = make(chan struct{})
+	bot.hunters = make([]*Hunter, 0, 200)
 	balancer := NewAccBalancer()
-	atomic.StoreInt32(&atomicHUNT_SYNC_ONE, 1) // hunting disabled
 	tcex, found := bot.exchanges["thorchain"]
 	if !found {
 		bot.logger.Panic().Msg("cannot find thorchain exchange")
@@ -167,7 +178,7 @@ func (bot *Bot) startHunters() error {
 			}*/
 
 			balancer.addMarket(exm)
-			h, err := bot.NewHunter(ob, pool, balancer, bot.store)
+			h, err := bot.NewHunter(ob, pool, balancer, bot.store, bot.syncer)
 			if err != nil {
 				return err
 			}
@@ -177,6 +188,7 @@ func (bot *Bot) startHunters() error {
 			bot.logger.Debug().Str("exchange", ex.GetName()).Str("market", exm.String()).Msg("hunters wanted to start")
 			hunterCnt++
 			exHunterCnt++
+			bot.hunters = append(bot.hunters, h)
 			h.start()
 			time.Sleep(400 * time.Millisecond)
 		}
@@ -185,13 +197,13 @@ func (bot *Bot) startHunters() error {
 	}
 	bot.logger.Info().Int("hunter count", hunterCnt).Msg("all hunters started - hunting enabled")
 
-	atomic.StoreInt32(&atomicHUNT_SYNC_ONE, 0) // hunting enabled
+	atomic.StoreInt32(&bot.syncer.AtomicHUNT_SYNC_ONE, 0) // hunting enabled
 	
 	return nil
 }
 
 // NewHunter creates new hunter
-func (bot *Bot) NewHunter(ob *common.Orderbook, pool *common.Pool, balancer *AccBalancer, store store.Store) (*Hunter, error) {
+func (bot *Bot) NewHunter(ob *common.Orderbook, pool *common.Pool, balancer *AccBalancer, store store.Store, syncer *HunterSyncer) (*Hunter, error) {
 	h := Hunter {
 		logger:		log.With().Str("module", "hunter").Str("exchange", ob.GetExchange().GetName()).Str("market", ob.GetMarket().String()).Logger(),
 		atomicHunting:	0,
@@ -200,6 +212,7 @@ func (bot *Bot) NewHunter(ob *common.Orderbook, pool *common.Pool, balancer *Acc
 		pool:		pool,
 		balancer:	balancer,
 		store:		store,
+		syncer:		syncer,
 	}
 	return &h, nil
 }
@@ -272,15 +285,12 @@ func (h *Hunter) RefreshOffers() {
 	h.RefreshOfferCaches()
 }
 func (h *Hunter) hunt() {
-	if atomic.LoadInt32(&atomicHUNT_SYNC_ONE) == 1 {
-		return
-	}
-	if HUNT_SYNC_ONE {
-		if !atomic.CompareAndSwapInt32(&atomicHUNT_SYNC_ONE, 0, 1) {
+	if h.syncer.HUNT_SYNC_ONE {
+		if !atomic.CompareAndSwapInt32(&h.syncer.AtomicHUNT_SYNC_ONE, 0, 1) {
 			//h.logger.Debug().Msg("already hunting")
 			return // already hunting
 		}
-		defer atomic.StoreInt32(&atomicHUNT_SYNC_ONE, 0)
+		defer atomic.StoreInt32(&h.syncer.AtomicHUNT_SYNC_ONE, 0)
 	} else {
 		if !atomic.CompareAndSwapInt32(&h.atomicHunting, 0, 1) {
 			//h.logger.Debug().Msg("already hunting")
@@ -288,6 +298,13 @@ func (h *Hunter) hunt() {
 		}
 		defer atomic.StoreInt32(&h.atomicHunting, 0)
 	}
+
+	// dobt start hunter if globally blocked (eg Wallet check)
+	if atomic.LoadInt32(&h.syncer.AtomicHUNTER_BLOCKED) == 1 {
+		return
+	}
+	h.syncer.MuxHUNTERS.Lock()
+	defer h.syncer.MuxHUNTERS.Unlock()
 
 	//h.logger.Info().Msg("hunting started - refreshinh caches")
 	h.RefreshOfferCaches()

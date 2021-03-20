@@ -67,11 +67,13 @@ func (t *Trader) createOrder(side common.OrderSide, pa common.PA, sync bool, opt
 		pa.Price.Fx8Int64(),
 		pa.Amount.Fx8Int64(),
 	)
+	t.acc.sequenceLock()
+	defer t.acc.sequenceUnlock()
 	commit, err := t.broadcastMsg(newOrderMsg, sync, options...)
 	if err != nil {
 		for i := 0; i < c.BNB_SEND_TOKEN_INV_SEQ_TRY_CNT && 
 		strings.Contains(err.Error(), "Invalid sequence.") || strings.Contains(err.Error(), "Tx already exists in cache"); i++ {
-			t.acc.sequenceInc()
+			t.acc.sequence++
 			commit, err = t.broadcastMsg(newOrderMsg, sync, options...)
 			if err == nil {
 				break
@@ -94,7 +96,7 @@ func (t *Trader) createOrder(side common.OrderSide, pa common.PA, sync bool, opt
 	return cdata.OrderId, nil
 }
 func (t *Trader) applyTraderFee(amount *common.Uint) {
-	coef := common.NewUint(100).Sub(common.NewUintFromFloat(c.BDEX_LIMIT_ORDER_FEE)).Quo(common.NewUint(100))
+	coef := common.OneUint().Sub(common.NewUintFromFloat(c.BDEX_LIMIT_ORDER_FEE))
 	*amount = amount.Mul(coef)
 }
 func newCreateOrderMsg(sender types.AccAddress, id string, side int8, symbol string, price int64, qty int64) msg.Msg {

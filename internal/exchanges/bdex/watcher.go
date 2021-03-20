@@ -34,26 +34,25 @@ func (b *bdex) startWatcher(market common.Market, onChange func(data interface{}
 		chDepth:  make(chan struct{}),
 		chDiff:   make(chan struct{}),
 	}
+	ob, err := watcher.readOrderbook()
+	if err == nil {
+		watcher.atomicOrderbook.Store(ob)
+	} else {
+		watcher.logger.Error().Err(err).Msg("watcher first orderbook read failed")
+		panic(0)
+	}
 	go watcher.watch()
 }
 func (w *watcher) watch() {
 	w.logger.Info().Msg("watcher loop started")
-	/*
-		ob, err := w.readOrderbook()
-		if err == nil {
-			w.atomicOrderbook.Store(*ob)
-		} else { // if error, no problem, we continue, maybe next time we will read the orderbook properly
-			w.logger.Error().Err(err).Msg("readOrderbook failed")
-		}
-	*/
 	w.subsDepth()
 	w.subsDiff()
 	w.check()
 	ticker := time.NewTicker(c.BDEX_ORDERBOOK_CHECK_MS * time.Millisecond)
 	for {
 		select {
-		case <-common.Quit:
-			w.logger.Info().Msg("bdex exchange loop stopped on common.Quit signal")
+		case <-common.Stop:
+			w.logger.Info().Msg("bdex exchange loop stopped on common.Stop signal")
 			return
 		case <-ticker.C:
 			w.check()
@@ -110,7 +109,7 @@ func (w *watcher) subsDepth() bool {
 	var i int
 	var err error
 	for i = 0; i < 10; i++ {
-		err = w.bdex.dex.SubscribeMarketDepthEvent(w.market.BaseAsset.Symbol.String(), w.market.QuoteAsset.Symbol.String(), common.Quit, w.onMarketDepthEvent,
+		err = w.bdex.dex.SubscribeMarketDepthEvent(w.market.BaseAsset.Symbol.String(), w.market.QuoteAsset.Symbol.String(), common.Stop, w.onMarketDepthEvent,
 			func(err error) {
 				w.logger.Debug().Err(err).Msg("onError - MarketDepthEvent")
 				w.chDepth <- struct{}{}
@@ -138,7 +137,7 @@ func (w *watcher) subsDiff() bool {
 	var i int
 	var err error
 	for i = 0; i < 10; i++ {
-		err = w.bdex.dex.SubscribeMarketDiffEvent(w.market.BaseAsset.Symbol.String(), w.market.QuoteAsset.Symbol.String(), common.Quit, w.onMarketDiffEvent,
+		err = w.bdex.dex.SubscribeMarketDiffEvent(w.market.BaseAsset.Symbol.String(), w.market.QuoteAsset.Symbol.String(), common.Stop, w.onMarketDiffEvent,
 			func(err error) {
 				w.logger.Debug().Err(err).Msg("onError - MarketDiffEvent")
 				w.chDepth <- struct{}{}

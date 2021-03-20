@@ -56,8 +56,8 @@ func (tc *tcpools) loop() {
 	ticker := time.NewTicker(c.ALLPOOL_CHECK_MS * time.Millisecond)
 	for {
 		select {
-		case <-common.Quit:
-			tc.logger.Info().Msg("bdex exchange loop stopped on common.Quit signal")
+		case <-common.Stop:
+			tc.logger.Info().Msg("bdex exchange loop stopped on common.Stop signal")
 			return
 		case <-ticker.C:
 			tc.readAndCheckAllPool()
@@ -86,9 +86,6 @@ func (tc *tcpools) readAndCheckAllPool() {
 }
 func (tc *tcpools) GetName() string {
 	return "THORChain"
-}
-func (tc *tcpools) CanWait() bool {
-	return true
 }
 func (tc *tcpools) GetAccount() common.Account {
 	return tc.acc
@@ -147,6 +144,10 @@ func (tc *tcpools) GetRunePriceOf(asset common.Asset) common.Uint {
 	watcher, found := tc.watchers[asset.ChainTickerString()]
 	if found {
 		depths = watcher.getPoolData()
+		if depths.Equal(common.Amounts{}) {
+			watcher.refresh()
+			depths = watcher.getPoolData()
+		}
 	} else {
 		depths = common.Amounts{}
 		s := asset.Ticker.String()
@@ -155,13 +156,16 @@ func (tc *tcpools) GetRunePriceOf(asset common.Asset) common.Uint {
 			for _, watcher = range watchers {
 				p := watcher.getPoolData()
 				if p.QuoteAmount > depths.QuoteAmount {
+					if p.Equal(common.Amounts{}) {
+						watcher.refresh()
+						p = watcher.getPoolData()
+					}
 					depths = p
 				}
 			}
 		} else {
-			tc.logger.Error().Str("asset", asset.String()).Msg("cannot get rune price for not watched pool")
-			//panic("cannot get rune price for not watched pool")
-			return 0
+			tc.logger.Error().Msgf("cannot get rune price for not watched pool %s", asset)
+			return common.ZeroUint()
 		}
 	}
 	return depths.QuoteAmount.Quo(depths.BaseAmount)

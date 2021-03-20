@@ -81,7 +81,10 @@ func applyDefaultConfig() {
 		"binance_api": AccountConfiguration{
 			Name: "binance_api",
 			Chains: AccountDetailChainConfiguration{
-				"ALL": AccountDetailConfiguration{KeystoreOrApiKey: "zfzoFyLGeVBIMNAR2NsRXgoXIB1V4QGDKXk1eTdNZ909VtVPvx8dP27e9lPyzX7y", PasswordOrSecretKey: "O0TCrJIchcQvU0diHdmGNf0UxfvxDsOH9skTF0DuO1vDSNhx0vmDNTiMTbdB3ztV"},
+				// Binance main
+//				"ALL": AccountDetailConfiguration{ KeystoreOrApiKey: "zfzoFyLGeVBIMNAR2NsRXgoXIB1V4QGDKXk1eTdNZ909VtVPvx8dP27e9lPyzX7y", PasswordOrSecretKey: "O0TCrJIchcQvU0diHdmGNf0UxfvxDsOH9skTF0DuO1vDSNhx0vmDNTiMTbdB3ztV" },
+				// Binance 2 (Ivka)
+				"ALL": AccountDetailConfiguration{KeystoreOrApiKey: "ug8dyUDuwdoV1FaH0UpgH6Y1iq27HbWRYZcoVw1FcvYsAEevI2dYltP3Wv2bkaU1", PasswordOrSecretKey: "CeBjWcY8wKjXyVCoFLRy2srgPqY8bVGLElelHDjeXNGtaHqqU4hLbJH1EoffTrjk"},
 			},
 		},
 		"bitmax_api": AccountConfiguration{

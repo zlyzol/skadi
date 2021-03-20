@@ -9,9 +9,7 @@ import (
 // Store represents methods required by Bot to store and load data from internal data store.
 type Store interface {
 	Ping() error
-
-	InsertTrade(record models.Trade) error
-
 	GetStats() (models.Stats, error)
 	GetTrades() (models.Trades, error)
+	InsertTrade(record models.Trade) error
 }

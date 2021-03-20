@@ -41,8 +41,8 @@ type StatsData struct {
 	TradeCount *int64 `json:"tradeCount,omitempty"`
 }
 
-// TradesData defines model for TradesData.
-type TradesData struct {
+// TradeData defines model for TradeData.
+type TradeData struct {
 
 	// Amount spent in RUNE
 	AmountIn *int64 `json:"amountIn,omitempty"`
@@ -60,6 +60,38 @@ type TradesData struct {
 	Time *string `json:"time,omitempty"`
 }
 
+// WalletAssetData defines model for WalletAssetData.
+type WalletAssetData struct {
+
+	// Asset
+	Asset *string `json:"asset,omitempty"`
+
+	// Start
+	Start *float64 `json:"start,omitempty"`
+
+	// Cur
+	Cur *float64 `json:"cur,omitempty"`
+
+	// Plus
+	Plus *float64 `json:"plus,omitempty"`
+
+	// PlusRune
+	PlusRune *float64 `json:"plusrune,omitempty"`
+}
+
+// WalletData defines model for WalletData.
+type WalletData struct {
+
+	// Time
+	Time *string `json:"time,omitempty"`
+
+	// PlusRune
+	PlusRune *float64 `json:"plusrune,omitempty"`
+
+	// Assets
+	Assets *[]WalletAssetData `json:"assets,omitempty"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	Error string `json:"error"`
@@ -70,15 +102,23 @@ type GeneralErrorResponse Error
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
-	Database      *bool  `json:"database,omitempty"`
-	ScannerHeight *int64 `json:"scannerHeight,omitempty"`
+	Database	*string `json:"database,omitempty"`
+	Bot			*string `json:"bot,omitempty"`
+}
+
+// StringResponse defines model for StringResponse.
+type StringResponse struct {
+	Result	*string `json:"result,omitempty"`
 }
 
 // StatsResponse defines model for StatsResponse.
 type StatsResponse StatsData
 
 // TradesResponse defines model for TradesResponse.
-type TradesResponse TradesData
+type TradesResponse TradeData
+
+// WalletResponse defines model for WalletResponse.
+type WalletResponse WalletData
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -98,15 +138,24 @@ type ServerInterface interface {
 	// Get Health
 	// (GET /v1/health)
 	GetHealth(ctx echo.Context) error
-	// Get bot statistics
-	// (GET /v1/stats)
-	GetSwagger(ctx echo.Context) error
-	// Get Arbitrage Trades' informations
-	// (GET /v1/trades)
-	GetStats(ctx echo.Context) error
+	// Starts bot
+	// (GET /v1/start)
+	GetStart(ctx echo.Context) error
+	// Stops bot
+	// (GET /v1/stop)
+	GetStop(ctx echo.Context) error
 	// Get Swagger
 	// (GET /v1/swagger.json)
+	GetSwagger(ctx echo.Context) error
+	// Get stats
+	// (GET /v1/stats)
+	GetStats(ctx echo.Context) error
+	// Get Trades
+	// (GET /v1/trades)
 	GetTrades(ctx echo.Context) error
+	// Get Swagger
+	// (GET /v1/wallet)
+	GetWallet(ctx echo.Context) error
 }
 
 // ServerInterfaceWrapper converts echo contexts to parameters.
@@ -129,6 +178,24 @@ func (w *ServerInterfaceWrapper) GetHealth(ctx echo.Context) error {
 
 	// Invoke the callback with all the unmarshalled arguments
 	err = w.Handler.GetHealth(ctx)
+	return err
+}
+
+// GetStart converts echo context to params.
+func (w *ServerInterfaceWrapper) GetStart(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetStart(ctx)
+	return err
+}
+
+// GetStop converts echo context to params.
+func (w *ServerInterfaceWrapper) GetStop(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetStop(ctx)
 	return err
 }
 
@@ -159,6 +226,15 @@ func (w *ServerInterfaceWrapper) GetTrades(ctx echo.Context) error {
 	return err
 }
 
+// GetWallet converts echo context to params.
+func (w *ServerInterfaceWrapper) GetWallet(ctx echo.Context) error {
+	var err error
+
+	// Invoke the callback with all the unmarshalled arguments
+	err = w.Handler.GetWallet(ctx)
+	return err
+}
+
 // RegisterHandlers adds each server route to the EchoRouter.
 func RegisterHandlers(router runtime.EchoRouter, si ServerInterface) {
 
@@ -169,9 +245,12 @@ func RegisterHandlers(router runtime.EchoRouter, si ServerInterface) {
 	router.GET("/", wrapper.GetStats)
 	router.GET("/v1/doc", wrapper.GetDocs)
 	router.GET("/v1/health", wrapper.GetHealth)
+	router.GET("/v1/start", wrapper.GetStart)
+	router.GET("/v1/stop", wrapper.GetStop)
 	router.GET("/v1/stats", wrapper.GetStats)
 	router.GET("/v1/swagger.json", wrapper.GetSwagger)
 	router.GET("/v1/trades", wrapper.GetTrades)
+	router.GET("/v1/wallet", wrapper.GetWallet)
 
 }
 

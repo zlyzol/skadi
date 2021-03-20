@@ -33,6 +33,22 @@ paths:
       description: Returns an object containing the health response of the API.
       responses:
         "200":
+          $ref: '#/components/responses/StringResponse'
+  "/v1/start":
+    get:
+      operationId: GetHealth
+      summary: Get Health
+      description: Returns an object containing the health response of the API.
+      responses:
+        "200":
+          $ref: '#/components/responses/StringResponse'
+  "/v1/stop":
+    get:
+      operationId: GetHealth
+      summary: Get Health
+      description: Returns an object containing the health response of the API.
+      responses:
+        "200":
           $ref: '#/components/responses/HealthResponse'
   "/v1/stats":
     get:
@@ -52,6 +68,16 @@ paths:
           $ref: '#/components/responses/GeneralErrorResponse'
         "200":
           $ref: '#/components/responses/TradesResponse'
+  "/v1/wallet":
+    get:
+      operationId: GetWallet
+      summary: Get Wallet change information
+      description: Get Wallet change information
+      responses:
+        "400":
+          $ref: '#/components/responses/GeneralErrorResponse'
+        "200":
+          $ref: '#/components/responses/WalletResponse'
 components:
   responses:
     StatsResponse:
@@ -74,6 +100,16 @@ components:
                 type: integer
                 format: int64
 
+    StringResponse:
+      description: Returns string as a result
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              result:
+                type: string
+
     TradesResponse:
       description: array containing Arbitrage Trades' informations
       content:
@@ -81,6 +117,25 @@ components:
           schema:
             type: array
             $ref: '#/components/schemas/TradeData'
+
+    WalletResponse:
+      description: Wallet change data
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              time:
+                type: string
+                description: Last update time
+              plusrune:
+                type: float
+                format: float64
+                description: Plus in RUNE
+              assets:
+                type: array
+                $ref: '#/components/schemas/WalletAssetData'
+                description: Wallet assets 
 
     GeneralErrorResponse:
       description: error message
@@ -140,6 +195,30 @@ components:
         pnl:
           type: string
           description: PNL
+
+    WalletAssetData:
+      type: object
+      properties:
+        asset:
+          type: string
+          description: Asset
+        start:
+          type: float
+          format: float64
+          description: Start amount
+        cur:
+          type: float
+          format: float64
+          description: Current amount
+        plus:
+          type: float
+          format: float64
+          description: Plus amount
+        plusrune:
+          type: float
+          format: float64
+          description: Plus amount in RUNE
+
     Error:
       required:
         - "error"

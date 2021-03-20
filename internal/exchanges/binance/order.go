@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"time"
+	"math"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
@@ -42,9 +43,17 @@ func NewOrder(trader *Trader, side common.OrderSide, amount common.Uint, order *
 		o.orderId = order.OrderID
 		o.result = &common.Result{
 			Err:		nil,
-			Amount:		common.NewUintFromString(order.ExecutedQuantity),
-			QuoteAmount:common.NewUintFromString(order.CummulativeQuoteQuantity),
-			AvgPrice:	common.NewUintFromString(order.Price),
+			//Amount:		common.NewUintFromString(order.ExecutedQuantity),
+			//QuoteAmount:common.NewUintFromString(order.CummulativeQuoteQuantity),
+			AvgPrice: common.NewUintFromFloat(math.NaN()), // <<-- don't use it     //common.NewUintFromString(order.Price),
+		}
+		for _, fill := range order.Fills {
+			o.result.Amount = o.result.Amount.Add(common.NewUintFromString(fill.Quantity))
+			o.result.QuoteAmount = o.result.QuoteAmount.Add(common.NewUintFromString(fill.Quantity).Mul(common.NewUintFromString(fill.Price)))
+		}
+		if !o.result.Amount.Equal(common.NewUintFromString(order.ExecutedQuantity)) || !o.result.QuoteAmount.Equal(common.NewUintFromString(order.CummulativeQuoteQuantity)) {
+			// why not equal?
+			o.logger.Info().Msgf("order amounts not equals (but should) %s, %s / %s, %s", o.result.Amount, order.ExecutedQuantity, o.result.QuoteAmount, order.CummulativeQuoteQuantity)
 		}
 		o.result.PartialFill = !o.amount.Equal(o.result.Amount)
 		if o.result.PartialFill { o.logger.Info().Msgf("partial fill because %s != %s", o.amount, o.result.Amount) }
@@ -74,7 +83,11 @@ func (o *Order) GetResult() common.Result {
 	if o.err != nil { // if there was a previous error while order sending just return it
 		o.logger.Error().Err(o.err).Msgf("order failed")
 	}
-	o.logger.Info().Msgf("order successful %+v", *o.result)
+	if o.result.Err != nil {
+		o.logger.Info().Msgf("order error %s", o.result.Err)
+	} else {
+		o.logger.Info().Msgf("order successful %s Fill, Amount: %s, QuoteAmount: %s", common.IfStr(o.result.PartialFill, "Parial", "Full"), o.result.Amount, o.result.QuoteAmount)
+	}
 	return *o.result
 }
 func (o *Order) Revert() error {
@@ -124,7 +137,11 @@ func (o *Order) readStatus() orderStatus {
 		o.trader.applyTraderFee(&o.result.QuoteAmount)
 		o.trader.applyTraderFee(&o.result.Amount)
 		o.logger.Info().Msgf("successful order amounts after applyTraderFee %s, %s", o.result.Amount, o.result.QuoteAmount)
-		o.result.AvgPrice = o.result.QuoteAmount.Quo(o.result.Amount)
+		if o.result.Amount.IsZero() {
+			o.result.Err = errors.New("order expired / not filled")
+		} else {
+			o.result.AvgPrice = o.result.QuoteAmount.Quo(o.result.Amount)
+		}
 	}
 	return status
 }
